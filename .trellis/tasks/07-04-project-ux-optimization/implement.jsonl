@@ -1,3 +1,4 @@
+{"file": ".trellis/spec/android/ui-guidelines.md", "reason": "Android Compose visual hierarchy, icon action, sensitive display, and mobile layout conventions."}
 {"file": ".trellis/spec/android/mobile-login-guidelines.md", "reason": "Android login, QR confirmation, credential display, and local verification constraints."}
 {"file": ".trellis/spec/guides/architecture-thinking-guide.md", "reason": "Scope and risk checklist for low-coupling UX changes."}
 {"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Search and reuse checklist before adding UI helpers."}

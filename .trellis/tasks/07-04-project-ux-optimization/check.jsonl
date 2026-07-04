@@ -1,3 +1,4 @@
+{"file": ".trellis/spec/android/ui-guidelines.md", "reason": "Quality checks for Android UI visual hierarchy, sensitive values, and mobile layout."}
 {"file": ".trellis/spec/android/mobile-login-guidelines.md", "reason": "Quality checks for QR validation, credential safety, and Android CI-only verification."}
 {"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Check UI state and ViewModel boundaries for QR/auth data flow."}
 {"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Confirm UI helper changes did not introduce avoidable duplication."}

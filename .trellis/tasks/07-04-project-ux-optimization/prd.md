@@ -65,7 +65,13 @@ Review the Synapse Client project end to end and improve the user experience in 
   * `SynapseLoginViewModel` validates malformed or expired QR payloads before mark/confirm network actions, and blocks web-login confirmation when no usable local credential exists.
   * `SynapseMobileApp` shows inline QR helper/error text, disables invalid QR actions, adds destructive-action confirmation dialogs, changes major actions to full-width mobile-friendly buttons, and renders SML tokens as previews while preserving full-token copy.
   * `QrScannerView` now explains the camera permission requirement before asking the user to grant access.
+* Implemented second-batch visual polish:
+  * `SynapseMobileTheme` now defines a fuller Material 3 light color scheme and shared rounded shapes for consistent surfaces.
+  * `SynapseMobileApp` now has a security-focused top app bar, account/token/QR readiness header, icon tabs, icon action buttons, tonal status banners, constrained panel width, and upgraded credential/account rows.
+  * `TurnstileVerificationView` now uses the same tonal card language with loading, error, retry, and verified state icons.
+  * `QrScannerView` now presents camera permission as a polished card and clips the camera preview into the app's rounded visual system.
 * Verification notes:
   * `git diff --check` passed.
   * Static grep found no new debug logging, plaintext token logging/display pattern, or new suppressions in changed UI files.
+  * Sensitive-token review found only the expected manual JWT field label and full SML token copy value; rendered UI still uses token preview text.
   * Local Gradle/lint/test commands were not run because repository policy prohibits local build/test execution.

@@ -10,17 +10,31 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import org.json.JSONObject
@@ -36,79 +50,137 @@ internal fun TurnstileVerificationPanel(
 ) {
     when {
         state.turnstileConfigLoading -> {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+            TurnstileCard {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("人机验证", style = MaterialTheme.typography.titleSmall)
-                    Text("正在加载人机验证配置。", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        }
-
-        state.turnstileConfigError != null -> {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Text("人机验证配置加载失败", style = MaterialTheme.typography.titleSmall)
-                    Text(state.turnstileConfigError, style = MaterialTheme.typography.bodyMedium)
-                    OutlinedButton(onClick = onReloadConfig) {
-                        Text("重新加载")
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("人机验证", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            text = "正在加载人机验证配置。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
         }
 
+        state.turnstileConfigError != null -> {
+            TurnstileCard(error = true) {
+                TurnstileHeader(
+                    icon = Icons.Outlined.WarningAmber,
+                    title = "人机验证配置加载失败",
+                    error = true,
+                )
+                Text(state.turnstileConfigError, style = MaterialTheme.typography.bodyMedium)
+                OutlinedButton(onClick = onReloadConfig) {
+                    Icon(Icons.Outlined.Refresh, contentDescription = null)
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("重新加载")
+                }
+            }
+        }
+
         state.requiresHumanVerification -> {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Text("人机验证", style = MaterialTheme.typography.titleSmall)
-                    TurnstileVerificationView(
-                        siteKey = state.turnstileConfig.siteKey.orEmpty(),
-                        pageBaseUrl = state.turnstilePageBaseUrl,
-                        refreshKey = state.turnstileWidgetKey,
-                        onVerified = onVerified,
-                        onExpired = onExpired,
-                        onError = onError,
-                    )
-                    when {
-                        state.turnstileVerified -> {
+            TurnstileCard {
+                TurnstileHeader(
+                    icon = Icons.Outlined.Security,
+                    title = "人机验证",
+                )
+                TurnstileVerificationView(
+                    siteKey = state.turnstileConfig.siteKey.orEmpty(),
+                    pageBaseUrl = state.turnstilePageBaseUrl,
+                    refreshKey = state.turnstileWidgetKey,
+                    onVerified = onVerified,
+                    onExpired = onExpired,
+                    onError = onError,
+                )
+                when {
+                    state.turnstileVerified -> {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.CheckCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
                             Text(
                                 text = "人机验证通过",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary,
                             )
                         }
+                    }
 
-                        state.turnstileError -> {
-                            Text(
-                                text = "验证失败，请重新验证。",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                            OutlinedButton(onClick = onRetryWidget) {
-                                Text("重新验证")
-                            }
+                    state.turnstileError -> {
+                        Text(
+                            text = "验证失败，请重新验证。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        OutlinedButton(onClick = onRetryWidget) {
+                            Icon(Icons.Outlined.Refresh, contentDescription = null)
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Text("重新验证")
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TurnstileCard(
+    error: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (error) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainer
+            },
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun TurnstileHeader(
+    icon: ImageVector,
+    title: String,
+    error: Boolean = false,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+        )
     }
 }
 
