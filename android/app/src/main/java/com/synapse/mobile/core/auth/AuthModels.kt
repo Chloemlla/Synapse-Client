@@ -89,16 +89,41 @@ data class TotpVerificationResult(
     val message: String?,
 )
 
-data class StoredSynapseCredentials(
+data class StoredSynapseAccount(
+    val accountId: String,
     val jwt: String?,
     val clientLoginToken: String?,
+    val clientLoginTokenExpiresAt: String?,
     val userId: String?,
     val username: String?,
     val email: String?,
 ) {
+    val displayName: String = username ?: email ?: userId ?: accountId
     val hasJwt: Boolean = !jwt.isNullOrBlank()
     val hasClientLoginToken: Boolean = !clientLoginToken.isNullOrBlank()
     val clientLoginTokenPreview: String? = clientLoginToken.toSensitiveTokenPreview()
+    val isClientLoginTokenExpired: Boolean =
+        clientLoginTokenExpiresAt?.let { raw ->
+            runCatching { Instant.now().isAfter(Instant.parse(raw)) }.getOrDefault(false)
+        } ?: false
+}
+
+data class StoredSynapseCredentials(
+    val jwt: String?,
+    val clientLoginToken: String?,
+    val clientLoginTokenExpiresAt: String?,
+    val userId: String?,
+    val username: String?,
+    val email: String?,
+    val activeAccountId: String?,
+    val accounts: List<StoredSynapseAccount>,
+) {
+    val hasJwt: Boolean = !jwt.isNullOrBlank()
+    val hasClientLoginToken: Boolean = !clientLoginToken.isNullOrBlank()
+    val clientLoginTokenPreview: String? = clientLoginToken.toSensitiveTokenPreview()
+    val activeAccount: StoredSynapseAccount? = accounts.firstOrNull { it.accountId == activeAccountId }
+    val displayName: String? = username ?: email ?: userId
+    val isClientLoginTokenExpired: Boolean = activeAccount?.isClientLoginTokenExpired == true
 }
 
 fun String?.toSensitiveTokenPreview(): String? {

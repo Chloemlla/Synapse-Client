@@ -166,6 +166,8 @@ synapse://mobile-login?sessionId=<sessionId>&scanToken=<scanToken>&apiBaseUrl=<a
 
 安卓端扫描后应校验 scheme 为 `synapse://mobile-login`，再展示账号、设备和目标站点确认页。
 
+当系统扫码或浏览器把 `synapse://mobile-login` deep link 打开到安卓客户端时，客户端应自动切换到“网页登录”页，填入 payload，并在 payload 有效时标记已扫码。
+
 ## 接口
 
 ### Web 创建扫码挑战
@@ -312,6 +314,10 @@ Content-Type: application/json
 
 客户端登录令牌当前有效期为 90 天。安卓端应存入 Android Keystore 或加密后的私有存储，不应写入日志。
 
+安卓端使用手动 JWT 授权时，必须先调用 `GET /api/auth/me` 获取 JWT 对应的真实用户，再调用 `/api/auth/mobile-login/client-token/issue` 签发该用户的 `sml_` 客户端登录令牌。客户端需要持久化保存 `clientLoginToken` 和后端返回的 `expiresAt`。
+
+安卓端可以同时保存多个账号的客户端登录令牌。每次成功登录或二次验证后，按后端返回的用户 ID 更新对应账号；扫码确认、静默登录、撤销和清理操作只作用于当前选中的账号。
+
 ### 客户端令牌兑换 JWT
 
 `POST /api/auth/mobile-login/client-token/exchange`
@@ -377,13 +383,14 @@ Content-Type: application/json
 1. 读取本地 `clientLoginToken`。
 2. 调用 `/client-token/exchange` 换取标准 JWT。
 3. 使用标准 JWT 调用业务 API。
-4. 如果返回 401，清理本地客户端令牌并要求用户重新登录。
+4. 如果本地保存的 `expiresAt` 已过期，自动吊销本地 `sml_` 令牌和 JWT，保留账号信息与过期时间，要求用户重新完成授权登录。
+5. 如果返回 401，清理本地客户端令牌并要求用户重新登录。
 
 扫码登录网页：
 
 1. 扫描 Web 登录页二维码并解析 deep link。
 2. 调用 `/challenge/scan` 标记已扫码。
-3. 展示确认页，确认目标站点 `apiBaseUrl`、当前账号和设备。
+3. 展示确认页，确认目标站点 `apiBaseUrl`、当前选中账号和设备 ID。
 4. 调用 `/challenge/confirm`，优先使用当前 JWT；JWT 不存在或过期时可使用 `clientLoginToken`。
 
 ## 错误与状态
@@ -407,6 +414,6 @@ Content-Type: application/json
 
 - `pollToken` 不进入二维码，只由 Web 端保存和轮询使用。
 - `scanToken` 只随二维码传给安卓端，用于证明安卓端扫描的是当前二维码。
-- 客户端登录令牌不要展示完整值，不要写日志，不要放入 URL。
+- 客户端登录令牌不要写日志，不要放入 URL。安卓端本地授权信息页可以展示并复制当前账号的 `sml_` 客户端登录令牌、过期时间、账号信息和设备 ID，但不得展示或复制 JWT、密码、`scanToken`。
 - 建议安卓端保存稳定 `deviceId`，换机或清除 App 数据后重新签发客户端令牌。
 - 扫码确认页必须显示目标站点和当前登录账号，降低误扫风险。

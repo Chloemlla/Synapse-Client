@@ -12,6 +12,7 @@ enum class SynapseTab(val label: String) {
 }
 
 data class SynapseUiState(
+    val selectedTab: SynapseTab = SynapseTab.Login,
     val username: String = "",
     val password: String = "",
     val totpCode: String = "",
@@ -27,9 +28,12 @@ data class SynapseUiState(
     val credentials: StoredSynapseCredentials = StoredSynapseCredentials(
         jwt = null,
         clientLoginToken = null,
+        clientLoginTokenExpiresAt = null,
         userId = null,
         username = null,
         email = null,
+        activeAccountId = null,
+        accounts = emptyList(),
     ),
     val loading: Boolean = false,
     val showScanner: Boolean = false,

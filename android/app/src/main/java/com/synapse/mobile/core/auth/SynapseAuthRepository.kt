@@ -15,6 +15,14 @@ class SynapseAuthRepository(
 
     fun credentials(): StoredSynapseCredentials = credentialStore.load()
 
+    fun revokeExpiredClientTokens(): Boolean =
+        credentialStore.revokeExpiredClientTokens()
+
+    fun selectAccount(accountId: String): StoredSynapseCredentials {
+        credentialStore.selectAccount(accountId)
+        return credentialStore.load()
+    }
+
     fun defaultDeviceName(): String =
         listOf(Build.MANUFACTURER, Build.MODEL)
             .joinToString(" ")
@@ -50,7 +58,7 @@ class SynapseAuthRepository(
             deviceId = deviceId.getOrCreate(),
             deviceName = deviceName.ifBlank { defaultDeviceName() },
         )
-        credentialStore.saveClientLoginToken(issued.clientLoginToken)
+        credentialStore.saveClientLoginToken(issued.clientLoginToken, issued.expiresAt)
 
         return LoginOutcome.Authenticated(
             user = login.user,
@@ -61,15 +69,17 @@ class SynapseAuthRepository(
     suspend fun issueClientTokenForJwt(jwt: String, deviceName: String): ClientTokenIssueResult {
         val normalizedJwt = jwt.trim()
         require(normalizedJwt.isNotBlank()) { "JWT is required." }
-        credentialStore.saveJwt(normalizedJwt)
-        return apiFor(defaultBaseUrl)
+        val api = apiFor(defaultBaseUrl)
+        val user = api.currentUser(normalizedJwt)
+        credentialStore.saveJwt(normalizedJwt, user)
+        return api
             .issueClientToken(
                 jwt = normalizedJwt,
                 deviceId = deviceId.getOrCreate(),
                 deviceName = deviceName.ifBlank { defaultDeviceName() },
             )
             .also { issued ->
-                credentialStore.saveClientLoginToken(issued.clientLoginToken)
+                credentialStore.saveClientLoginToken(issued.clientLoginToken, issued.expiresAt)
             }
     }
 
@@ -103,7 +113,7 @@ class SynapseAuthRepository(
             deviceId = deviceId.getOrCreate(),
             deviceName = deviceName.ifBlank { defaultDeviceName() },
         )
-        credentialStore.saveClientLoginToken(issued.clientLoginToken)
+        credentialStore.saveClientLoginToken(issued.clientLoginToken, issued.expiresAt)
 
         return LoginOutcome.Authenticated(
             user = result.user,
@@ -143,7 +153,7 @@ class SynapseAuthRepository(
             deviceId = deviceId.getOrCreate(),
             deviceName = deviceName.ifBlank { defaultDeviceName() },
         )
-        credentialStore.saveClientLoginToken(issued.clientLoginToken)
+        credentialStore.saveClientLoginToken(issued.clientLoginToken, issued.expiresAt)
 
         return LoginOutcome.Authenticated(
             user = user,
@@ -152,6 +162,9 @@ class SynapseAuthRepository(
     }
 
     suspend fun silentLogin(): JwtExchangeResult {
+        require(!credentialStore.revokeExpiredClientTokens()) {
+            "SML 登录令牌已过期，请重新完成授权登录。"
+        }
         val stored = credentialStore.load()
         val clientToken = stored.clientLoginToken
             ?: throw IllegalStateException("No client login token is stored on this device.")
@@ -163,7 +176,7 @@ class SynapseAuthRepository(
                     credentialStore.saveJwt(result.token, result.user)
                 }
         } catch (error: SynapseApiException) {
-            if (error.statusCode == 401) credentialStore.clearAll()
+            if (error.statusCode == 401) credentialStore.clearCurrentAccount()
             throw error
         }
     }
@@ -175,6 +188,9 @@ class SynapseAuthRepository(
     }
 
     suspend fun confirmQrLogin(rawPayload: String): MobileLoginStatus {
+        require(!credentialStore.revokeExpiredClientTokens()) {
+            "SML 登录令牌已过期，请重新完成授权登录。"
+        }
         val payload = SynapseQrPayload.parse(rawPayload)
         require(!payload.isExpired) { "QR challenge has expired." }
         val stored = credentialStore.load()
@@ -200,18 +216,21 @@ class SynapseAuthRepository(
     }
 
     suspend fun revokeClientLoginToken(): Boolean {
+        require(!credentialStore.revokeExpiredClientTokens()) {
+            "SML 登录令牌已过期，请重新完成授权登录。"
+        }
         val stored = credentialStore.load()
         val jwt = stored.jwt ?: throw IllegalStateException("A JWT is required to revoke the client login token.")
         val clientToken = stored.clientLoginToken
             ?: throw IllegalStateException("No client login token is stored on this device.")
 
         return apiFor(defaultBaseUrl).revokeClientToken(jwt, clientToken).also { revoked ->
-            if (revoked) credentialStore.clearAll()
+            if (revoked) credentialStore.clearCurrentAccount()
         }
     }
 
     fun clearCredentials() {
-        credentialStore.clearAll()
+        credentialStore.clearCurrentAccount()
     }
 
     private fun apiFor(baseUrl: String): SynapseMobileLoginApi =

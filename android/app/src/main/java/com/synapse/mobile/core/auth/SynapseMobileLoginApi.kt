@@ -86,6 +86,12 @@ class SynapseMobileLoginApi(
                 .put("deviceId", deviceId),
         ) { it.toJwtExchangeResult() }
 
+    suspend fun currentUser(jwt: String): SynapseUser =
+        get(
+            path = "/api/auth/me",
+            bearerToken = jwt,
+        ) { it.toSynapseUser() }
+
     suspend fun startPasskeyAuthentication(username: String, clientOrigin: String): PasskeyAuthenticationStartResult =
         post(
             path = "/api/passkey/authenticate/start",
@@ -162,6 +168,41 @@ class SynapseMobileLoginApi(
                         url = request.url.toString(),
                         statusCode = response.code,
                         requestFields = requestFields,
+                        responseText = responseText,
+                    ),
+                )
+            }
+            parse(responseText.toJsonObject())
+        }
+    }
+
+    private suspend fun <T> get(
+        path: String,
+        bearerToken: String? = null,
+        parse: (JSONObject) -> T,
+    ): T = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(resolveUrl(path))
+            .get()
+            .header("Accept", "application/json")
+            .header("User-Agent", USER_AGENT)
+            .apply {
+                bearerToken
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { header("Authorization", "Bearer $it") }
+            }
+            .build()
+
+        httpClient.newCall(request).execute().use { response ->
+            val responseText = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw SynapseApiException(
+                    response.code,
+                    SynapseApiErrorFormatter.failureMessage(
+                        method = request.method,
+                        url = request.url.toString(),
+                        statusCode = response.code,
+                        requestFields = emptyList(),
                         responseText = responseText,
                     ),
                 )

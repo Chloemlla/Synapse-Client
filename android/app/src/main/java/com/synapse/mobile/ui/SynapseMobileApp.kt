@@ -27,20 +27,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.synapse.mobile.core.auth.StoredSynapseAccount
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SynapseMobileApp(viewModel: SynapseLoginViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var selectedTab by rememberSaveable { mutableStateOf(SynapseTab.Login) }
 
     Scaffold(
         topBar = {
@@ -56,11 +55,11 @@ fun SynapseMobileApp(viewModel: SynapseLoginViewModel) {
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            TabRow(selectedTabIndex = selectedTab.ordinal) {
+            TabRow(selectedTabIndex = state.selectedTab.ordinal) {
                 SynapseTab.entries.forEach { tab ->
                     Tab(
-                        selected = selectedTab == tab,
-                        onClick = { selectedTab = tab },
+                        selected = state.selectedTab == tab,
+                        onClick = { viewModel.selectTab(tab) },
                         text = { Text(tab.label) },
                     )
                 }
@@ -68,7 +67,7 @@ fun SynapseMobileApp(viewModel: SynapseLoginViewModel) {
 
             StatusBanner(state = state)
 
-            when (selectedTab) {
+            when (state.selectedTab) {
                 SynapseTab.Login -> LoginPanel(state, viewModel)
                 SynapseTab.Qr -> QrPanel(state, viewModel)
                 SynapseTab.Session -> SessionPanel(state, viewModel)
@@ -116,6 +115,11 @@ private fun LoginPanel(
 ) {
     PanelColumn {
         SectionTitle("登录本客户端")
+        CredentialSummary(
+            state = state,
+            viewModel = viewModel,
+            title = "本客户端授权信息",
+        )
         OutlinedTextField(
             value = state.username,
             onValueChange = viewModel::updateUsername,
@@ -238,6 +242,11 @@ private fun QrPanel(
 ) {
     PanelColumn {
         SectionTitle("确认网页登录")
+        CredentialSummary(
+            state = state,
+            viewModel = viewModel,
+            title = "网页登录使用的本客户端账号",
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 enabled = !state.loading,
@@ -298,14 +307,10 @@ private fun SessionPanel(
 ) {
     PanelColumn {
         SectionTitle("本地会话")
-        InfoCard(
+        CredentialSummary(
+            state = state,
+            viewModel = viewModel,
             title = "设备与凭据",
-            lines = listOf(
-                "Device ID：${state.deviceId}",
-                "当前账号：${state.credentials.username ?: state.credentials.email ?: "未登录"}",
-                "JWT：${if (state.credentials.hasJwt) "已保存" else "未保存"}",
-                "客户端登录令牌：${if (state.credentials.hasClientLoginToken) "已保存" else "未保存"}",
-            ),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
@@ -326,6 +331,114 @@ private fun SessionPanel(
             onClick = viewModel::clearCredentials,
         ) {
             Text("清理本地凭据")
+        }
+    }
+}
+
+@Composable
+private fun CredentialSummary(
+    state: SynapseUiState,
+    viewModel: SynapseLoginViewModel,
+    title: String,
+) {
+    val accounts = state.credentials.accounts
+    if (accounts.isEmpty()) return
+
+    val active = state.credentials.activeAccount ?: accounts.first()
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            CopyableLine("当前账号", active.displayName)
+            CopyableLine("User ID", active.userId ?: "未返回")
+            CopyableLine("邮箱", active.email ?: "未返回")
+            CopyableLine("当前设备 ID", state.deviceId)
+            CopyableLine("SML 登录令牌", active.clientLoginToken ?: "未保存")
+            CopyableLine("SML 过期时间", active.clientLoginTokenExpiresAt ?: "未保存")
+            Text(
+                text = when {
+                    active.clientLoginToken == null && active.clientLoginTokenExpiresAt != null ->
+                        "SML 登录令牌已过期并已自动吊销，请重新完成授权登录。"
+                    active.isClientLoginTokenExpired ->
+                        "SML 登录令牌已过期，请重新完成授权登录。"
+                    active.hasClientLoginToken ->
+                        "SML 登录令牌有效期以服务端签发时间为准。"
+                    else ->
+                        "当前账号尚未保存 SML 登录令牌。"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            if (accounts.size > 1) {
+                Text("已登录账号", style = MaterialTheme.typography.titleSmall)
+                accounts.forEach { account ->
+                    AccountSelectorRow(
+                        account = account,
+                        active = account.accountId == active.accountId,
+                        onSelect = { viewModel.selectAccount(account.accountId) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountSelectorRow(
+    account: StoredSynapseAccount,
+    active: Boolean,
+    onSelect: () -> Unit,
+) {
+    val clipboard = LocalClipboardManager.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = if (active) "当前：${account.displayName}" else account.displayName,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        OutlinedButton(
+            onClick = { clipboard.setText(AnnotatedString(account.displayName)) },
+        ) {
+            Text("复制")
+        }
+        OutlinedButton(
+            enabled = !active,
+            onClick = onSelect,
+        ) {
+            Text("切换")
+        }
+    }
+}
+
+@Composable
+private fun CopyableLine(label: String, value: String) {
+    val clipboard = LocalClipboardManager.current
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = value,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            OutlinedButton(
+                enabled = value.isNotBlank() && value != "未返回" && value != "未保存",
+                onClick = { clipboard.setText(AnnotatedString(value)) },
+            ) {
+                Text("复制")
+            }
         }
     }
 }

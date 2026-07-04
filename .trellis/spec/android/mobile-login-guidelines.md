@@ -24,6 +24,7 @@ Core Kotlin APIs:
 
 ```kotlin
 SynapseMobileLoginApi.standardLogin(identifier: String, password: String): StandardLoginResult
+SynapseMobileLoginApi.currentUser(jwt: String): SynapseUser
 SynapseMobileLoginApi.issueClientToken(jwt: String, deviceId: String, deviceName: String): ClientTokenIssueResult
 SynapseMobileLoginApi.exchangeClientToken(clientLoginToken: String, deviceId: String): JwtExchangeResult
 SynapseMobileLoginApi.verifyTotp(userId: String, pendingToken: String, token: String?, backupCode: String?): TotpVerificationResult
@@ -44,6 +45,7 @@ Required API paths:
 
 ```text
 POST /api/auth/login
+GET /api/auth/me
 POST /api/totp/verify-token
 POST /api/auth/mobile-login/challenge
 POST /api/auth/mobile-login/challenge/scan
@@ -151,7 +153,12 @@ Credential contract:
 
 - JWT and `clientLoginToken` live only in encrypted private app storage.
 - `deviceId` is stable for the install and may reset when app data is cleared.
-- UI may show whether a token exists, never the token value.
+- The credential store supports multiple accounts at the same time and tracks one active account for QR confirmation, silent login, revoke, and clear-current-account actions.
+- A legacy single-account credential record must be migrated into the multi-account list on first load.
+- UI may show whether a JWT exists, never the JWT value.
+- Manual JWT authorization must call `GET /api/auth/me` first, bind the JWT to the returned real user, then issue and persist that user's `sml_` client login token.
+- Store the `expiresAt` returned by `/client-token/issue` with the corresponding `sml_` token.
+- UI may show and copy the active account `sml_` client login token and its expiration time when explicitly presenting local authorization details; do not log it or include it in API error diagnostics.
 
 ### 4. Validation & Error Matrix
 
@@ -160,25 +167,30 @@ Credential contract:
 | QR scheme/host is not `synapse://mobile-login` | Reject before network request |
 | QR `apiBaseUrl` is not HTTPS | Reject before network request |
 | QR is expired | Reject scan/confirm action |
+| App receives a `synapse://mobile-login` intent | Parse the payload, select the Web login tab, and mark scanned when valid |
 | Standard login returns `requires2FA` | Preserve `user`, short-lived token, and `twoFactorType`; do not issue client token until a JWT is available |
 | TOTP verify returns a JWT | Save the JWT encrypted, then issue and save the client login token |
 | Passkey start returns WebAuthn `options` | Keep the raw options for the native/browser assertion flow, but show only a summary; do not display `challenge` or credential IDs in full |
 | Passkey finish returns a JWT | Save the JWT encrypted, then issue and save the client login token |
 | Client token exchange returns 401 | Clear local credentials and require login |
+| Stored `sml_` `expiresAt` is in the past | Clear that account's JWT and `sml_` token locally, keep the account metadata and expiration time, and require authorization login again |
 | JWT confirm returns 401 and client token exists | Clear local JWT and retry confirm with client token |
 | Revoke succeeds with `revoked=true` | Clear local credentials |
+| Multiple accounts are stored | Display all accounts, allow switching the active account, and use only the active account for QR confirmation |
 | Missing certificate pins while pins are required | Fail OkHttp client creation |
 | API returns validation details in `details`, `errors`, or `issues` | Show the backend message plus field-level reasons, HTTP status, method, URL, and request field names; never echo request values such as passwords, JWTs, `clientLoginToken`, or `scanToken` |
 
 ### 5. Good/Base/Bad Cases
 
-Good: scanner receives a valid QR payload, `markScanned` posts `sessionId` and `scanToken`, the confirmation screen shows target site, and `confirmQrLogin` uses JWT or `clientLoginToken`.
+Good: scanner or system deep link receives a valid QR payload, the app opens the Web login tab, `markScanned` posts `sessionId` and `scanToken`, the confirmation screen shows target site, active account, device id, and `confirmQrLogin` uses the active account JWT or `clientLoginToken`.
 
 Base: user has a `clientLoginToken` but no JWT; app exchanges it at startup and stores the returned JWT/user.
 
+Multi-account: logging in as a second user appends or updates that account instead of overwriting the first account. The selected account is the only account used for silent login, revoke, and QR confirmation.
+
 Two-factor: standard login returns `requires2FA` with `twoFactorType: ["TOTP", "Passkey"]`; app shows the available methods and a short token preview, then requests Passkey options only when the user chooses Passkey.
 
-Bad: app logs a full JWT or client login token, accepts HTTP `apiBaseUrl`, or confirms a QR login without showing the target site.
+Bad: app logs a full JWT or client login token, accepts HTTP `apiBaseUrl`, overwrites an existing account when logging in as another user, or confirms a QR login without showing the target site.
 
 Error display: if an API response says only `输入验证失败` in the top-level message but includes nested field errors, the app must surface those field errors to the user. The diagnostic request context may include `POST https://.../api/...`, HTTP status, and submitted field names only; it must not include submitted values.
 
@@ -217,5 +229,5 @@ Text(if (credentials.hasClientLoginToken) "已保存" else "未保存")
 JSONObject().put("identifier", identifier).put("password", password)
 if (login.requiresTwoFactor) return PendingTwoFactorChallenge(login.user, login.twoFactorToken, login.twoFactorTypes)
 require(apiBaseUrl.startsWith("https://"))
-credentialStore.saveClientLoginToken(clientLoginToken)
+credentialStore.saveClientLoginToken(clientLoginToken, expiresAt)
 ```

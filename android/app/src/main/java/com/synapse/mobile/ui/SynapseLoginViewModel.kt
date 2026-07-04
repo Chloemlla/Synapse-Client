@@ -25,6 +25,45 @@ class SynapseLoginViewModel(
     )
     val state: StateFlow<SynapseUiState> = mutableState.asStateFlow()
 
+    init {
+        if (repository.revokeExpiredClientTokens()) {
+            mutableState.update {
+                it.copy(
+                    credentials = repository.credentials(),
+                    status = "检测到 SML 登录令牌已过期，已自动吊销本地令牌，请重新完成授权登录。",
+                )
+            }
+        }
+    }
+
+    fun selectTab(tab: SynapseTab) {
+        mutableState.update { it.copy(selectedTab = tab, error = null) }
+    }
+
+    fun selectAccount(accountId: String) {
+        runCatching { repository.selectAccount(accountId) }
+            .onSuccess { credentials ->
+                val revokedExpired = repository.revokeExpiredClientTokens()
+                val refreshedCredentials = repository.credentials()
+                mutableState.update {
+                    it.copy(
+                        credentials = refreshedCredentials,
+                        status = if (revokedExpired) {
+                            "已切换账号，并检测到 SML 登录令牌已过期，已自动吊销本地令牌，请重新完成授权登录。"
+                        } else {
+                            "已切换当前账号：${credentials.displayName ?: accountId}"
+                        },
+                        error = null,
+                    )
+                }
+            }
+            .onFailure { error ->
+                mutableState.update {
+                    it.copy(error = error.message ?: error::class.java.simpleName)
+                }
+            }
+    }
+
     fun updateUsername(value: String) {
         mutableState.update {
             it.copy(
@@ -90,7 +129,7 @@ class SynapseLoginViewModel(
 
     fun acceptScannedPayload(rawPayload: String) {
         updateManualQrPayload(rawPayload)
-        mutableState.update { it.copy(showScanner = false) }
+        mutableState.update { it.copy(selectedTab = SynapseTab.Qr, showScanner = false) }
         markScanned()
     }
 
@@ -292,7 +331,7 @@ class SynapseLoginViewModel(
                 passkeyAssertionJson = "",
                 totpCode = "",
                 backupCode = "",
-                status = "本地凭据已清理。",
+                status = "当前账号本地凭据已清理。",
                 error = null,
             )
         }
