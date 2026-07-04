@@ -193,11 +193,21 @@ class SynapseLoginViewModel(
     }
 
     fun updateManualQrPayload(value: String) {
-        val parsedPayload = runCatching { SynapseQrPayload.parse(value) }.getOrNull()
+        val parseResult = value
+            .takeIf { it.isNotBlank() }
+            ?.let { runCatching { SynapseQrPayload.parse(it) } }
+        val parsedPayload = parseResult?.getOrNull()
+        val qrPayloadError = when {
+            value.isBlank() -> null
+            parsedPayload == null -> parseResult?.exceptionOrNull()?.message ?: "网页登录二维码 payload 格式无效。"
+            parsedPayload.isExpired -> "网页登录二维码已过期，请在网页端重新生成二维码。"
+            else -> null
+        }
         mutableState.update {
             it.copy(
                 manualQrPayload = value,
                 parsedQrPayload = parsedPayload,
+                qrPayloadError = qrPayloadError,
                 error = null,
             )
         }
@@ -380,11 +390,9 @@ class SynapseLoginViewModel(
     }
 
     fun markScanned() {
-        val rawPayload = state.value.manualQrPayload
-        if (rawPayload.isBlank()) {
-            mutableState.update { it.copy(error = "请先扫描或粘贴网页登录二维码 payload。") }
-            return
-        }
+        val current = state.value
+        if (!ensureQrPayloadReady(current)) return
+        val rawPayload = current.manualQrPayload
 
         launchAction {
             val result = repository.parseAndMarkScanned(rawPayload)
@@ -395,12 +403,15 @@ class SynapseLoginViewModel(
     }
 
     fun confirmQrLogin() {
-        val rawPayload = state.value.manualQrPayload
-        if (rawPayload.isBlank()) {
-            mutableState.update { it.copy(error = "请先扫描或粘贴网页登录二维码 payload。") }
+        val current = state.value
+        if (!ensureQrPayloadReady(current)) return
+        if (!current.hasAnyWebLoginCredential) {
+            mutableState.update {
+                it.copy(error = "请先登录本客户端并签发令牌，再继续网页登录。")
+            }
             return
         }
-        val accounts = state.value.credentials.accounts
+        val accounts = current.credentials.accounts
         if (accounts.size > 1) {
             mutableState.update {
                 it.copy(
@@ -420,12 +431,11 @@ class SynapseLoginViewModel(
     }
 
     fun confirmQrLoginWithAccount(accountId: String) {
-        val rawPayload = state.value.manualQrPayload
-        if (rawPayload.isBlank()) {
+        val current = state.value
+        if (!ensureQrPayloadReady(current)) {
             mutableState.update {
                 it.copy(
                     showWebLoginAccountPicker = false,
-                    error = "请先扫描或粘贴网页登录二维码 payload。",
                 )
             }
             return
@@ -511,6 +521,27 @@ class SynapseLoginViewModel(
                     }
             }
         }
+    }
+
+    private fun ensureQrPayloadReady(current: SynapseUiState): Boolean {
+        if (current.manualQrPayload.isBlank()) {
+            mutableState.update { it.copy(error = "请先扫描或粘贴网页登录二维码 payload。") }
+            return false
+        }
+        val payload = current.parsedQrPayload
+        if (payload == null || current.qrPayloadError != null) {
+            mutableState.update {
+                it.copy(error = current.qrPayloadError ?: "网页登录二维码 payload 格式无效。")
+            }
+            return false
+        }
+        if (payload.isExpired) {
+            mutableState.update {
+                it.copy(error = "网页登录二维码已过期，请在网页端重新生成二维码。")
+            }
+            return false
+        }
+        return true
     }
 
     private fun SynapseUiState.resetTurnstileChallenge(): SynapseUiState =

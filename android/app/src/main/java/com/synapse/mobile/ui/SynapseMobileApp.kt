@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -31,12 +32,17 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.synapse.mobile.core.auth.StoredSynapseAccount
@@ -104,10 +110,11 @@ private fun StatusBanner(state: SynapseUiState) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (state.loading) {
-                CircularProgressIndicator()
+                CircularProgressIndicator(modifier = Modifier.size(20.dp))
             }
             Text(
                 text = state.error ?: state.status.ifBlank { "处理中..." },
+                modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
@@ -158,6 +165,7 @@ private fun LoginPanel(
             onReloadConfig = viewModel::loadTurnstileConfig,
         )
         Button(
+            modifier = Modifier.fillMaxWidth(),
             enabled = !state.loading &&
                 !state.turnstileConfigLoading &&
                 state.turnstileConfigError == null &&
@@ -182,6 +190,7 @@ private fun LoginPanel(
             )
             if (challenge.methods.any { it.equals("Passkey", ignoreCase = true) }) {
                 OutlinedButton(
+                    modifier = Modifier.fillMaxWidth(),
                     enabled = !state.loading,
                     onClick = viewModel::startPasskeyAuthentication,
                 ) {
@@ -205,6 +214,7 @@ private fun LoginPanel(
                     label = { Text("备用恢复码") },
                 )
                 Button(
+                    modifier = Modifier.fillMaxWidth(),
                     enabled = !state.loading && (state.totpCode.isNotBlank() || state.backupCode.isNotBlank()),
                     onClick = viewModel::verifyTotp,
                 ) {
@@ -227,6 +237,7 @@ private fun LoginPanel(
                 label = { Text("Passkey assertion response JSON") },
             )
             Button(
+                modifier = Modifier.fillMaxWidth(),
                 enabled = !state.loading && state.passkeyAssertionJson.isNotBlank(),
                 onClick = viewModel::finishPasskeyAuthentication,
             ) {
@@ -244,6 +255,7 @@ private fun LoginPanel(
             label = { Text("网页端或二次验证后的 JWT") },
         )
         OutlinedButton(
+            modifier = Modifier.fillMaxWidth(),
             enabled = !state.loading && state.manualJwt.isNotBlank(),
             onClick = viewModel::issueClientTokenFromJwt,
         ) {
@@ -257,6 +269,13 @@ private fun QrPanel(
     state: SynapseUiState,
     viewModel: SynapseLoginViewModel,
 ) {
+    val qrPayloadHelperText = state.qrPayloadError
+        ?: if (state.hasUsableQrPayload) {
+            "二维码有效，确认前请核对目标站点和账号。"
+        } else {
+            "扫描或粘贴 synapse://mobile-login 二维码 payload。"
+        }
+
     PanelColumn {
         SectionTitle("确认网页登录")
         CredentialSummary(
@@ -264,15 +283,23 @@ private fun QrPanel(
             viewModel = viewModel,
             title = "网页登录使用的本客户端账号",
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!state.hasAnyWebLoginCredential) {
+            InfoCard(
+                title = "需要先登录本客户端",
+                lines = listOf("确认网页登录前，请先完成本客户端登录并签发令牌。"),
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
+                modifier = Modifier.fillMaxWidth(),
                 enabled = !state.loading,
                 onClick = { viewModel.setScannerVisible(!state.showScanner) },
             ) {
                 Text(if (state.showScanner) "关闭相机" else "扫描网页登录二维码")
             }
             OutlinedButton(
-                enabled = !state.loading,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.loading && state.hasUsableQrPayload,
                 onClick = viewModel::markScanned,
             ) {
                 Text("标记网页登录已扫码")
@@ -291,8 +318,10 @@ private fun QrPanel(
             onValueChange = viewModel::updateManualQrPayload,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(128.dp),
+                .heightIn(min = 128.dp),
             minLines = 3,
+            isError = state.qrPayloadError != null,
+            supportingText = { Text(qrPayloadHelperText) },
             label = { Text("网页登录二维码 payload") },
         )
 
@@ -309,7 +338,8 @@ private fun QrPanel(
         }
 
         Button(
-            enabled = !state.loading && state.manualQrPayload.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !state.loading && state.hasUsableQrPayload && state.hasAnyWebLoginCredential,
             onClick = viewModel::confirmQrLogin,
         ) {
             Text("确认登录网页端")
@@ -415,6 +445,9 @@ private fun SessionPanel(
     state: SynapseUiState,
     viewModel: SynapseLoginViewModel,
 ) {
+    var showRevokeConfirmation by rememberSaveable { mutableStateOf(false) }
+    var showClearConfirmation by rememberSaveable { mutableStateOf(false) }
+
     PanelColumn {
         SectionTitle("本地会话")
         CredentialSummary(
@@ -422,26 +455,55 @@ private fun SessionPanel(
             viewModel = viewModel,
             title = "设备与凭据",
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                enabled = !state.loading,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.loading && state.hasCurrentClientLoginToken,
                 onClick = viewModel::silentLogin,
             ) {
                 Text("自动登录本客户端")
             }
             OutlinedButton(
-                enabled = !state.loading,
-                onClick = viewModel::revokeClientToken,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.loading && state.hasCurrentClientLoginToken,
+                onClick = { showRevokeConfirmation = true },
             ) {
                 Text("撤销本客户端令牌")
             }
         }
         OutlinedButton(
-            enabled = !state.loading,
-            onClick = viewModel::clearCredentials,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !state.loading && state.hasStoredAccount,
+            onClick = { showClearConfirmation = true },
         ) {
             Text("清理本地凭据")
         }
+    }
+
+    if (showRevokeConfirmation) {
+        ConfirmActionDialog(
+            title = "撤销本客户端令牌",
+            message = "撤销后当前账号需要重新完成授权登录，才能继续静默登录或确认网页登录。",
+            confirmText = "撤销",
+            onConfirm = {
+                showRevokeConfirmation = false
+                viewModel.revokeClientToken()
+            },
+            onDismiss = { showRevokeConfirmation = false },
+        )
+    }
+
+    if (showClearConfirmation) {
+        ConfirmActionDialog(
+            title = "清理本地凭据",
+            message = "清理后当前账号保存在本机的 JWT 和 SML 登录令牌会被移除。",
+            confirmText = "清理",
+            onConfirm = {
+                showClearConfirmation = false
+                viewModel.clearCredentials()
+            },
+            onDismiss = { showClearConfirmation = false },
+        )
     }
 }
 
@@ -468,7 +530,11 @@ private fun CredentialSummary(
             CopyableLine("User ID", active.userId ?: "未返回")
             CopyableLine("邮箱", active.email ?: "未返回")
             CopyableLine("当前设备 ID", state.deviceId)
-            CopyableLine("SML 登录令牌", active.clientLoginToken ?: "未保存")
+            CopyableLine(
+                label = "SML 登录令牌",
+                value = active.clientLoginTokenPreview ?: "未保存",
+                copyValue = active.clientLoginToken.orEmpty(),
+            )
             CopyableLine("SML 过期时间", active.clientLoginTokenExpiresAt ?: "未保存")
             Text(
                 text = when {
@@ -510,11 +576,14 @@ private fun AccountSelectorRow(
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = if (active) "当前：${account.displayName}" else account.displayName,
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyMedium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
         OutlinedButton(
             onClick = {
@@ -535,25 +604,33 @@ private fun AccountSelectorRow(
 }
 
 @Composable
-private fun CopyableLine(label: String, value: String) {
+private fun CopyableLine(
+    label: String,
+    value: String,
+    copyValue: String = value,
+) {
     val clipboard = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
+    val canCopy = copyValue.isNotBlank() && copyValue != "未返回" && copyValue != "未保存"
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = value,
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
             OutlinedButton(
-                enabled = value.isNotBlank() && value != "未返回" && value != "未保存",
+                enabled = canCopy,
                 onClick = {
                     coroutineScope.launch {
-                        clipboard.setClipEntry(value.toClipEntry(label))
+                        clipboard.setClipEntry(copyValue.toClipEntry(label))
                     }
                 },
             ) {
@@ -565,6 +642,36 @@ private fun CopyableLine(label: String, value: String) {
 
 private fun String.toClipEntry(label: String): ClipEntry =
     ClipEntry(ClipData.newPlainText(label, this))
+
+@Composable
+private fun ConfirmActionDialog(
+    title: String,
+    message: String,
+    confirmText: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text(confirmText)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+    )
+}
 
 @Composable
 private fun PanelColumn(content: @Composable () -> Unit) {

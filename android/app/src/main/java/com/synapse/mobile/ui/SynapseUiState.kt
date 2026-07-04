@@ -23,6 +23,7 @@ data class SynapseUiState(
     val deviceId: String = "",
     val manualQrPayload: String = "",
     val parsedQrPayload: SynapseQrPayload? = null,
+    val qrPayloadError: String? = null,
     val pendingTwoFactorChallenge: PendingTwoFactorChallenge? = null,
     val passkeyOptions: PasskeyAuthenticationOptions? = null,
     val passkeyAssertionJson: String = "",
@@ -51,4 +52,13 @@ data class SynapseUiState(
     val error: String? = null,
 ) {
     val requiresHumanVerification: Boolean = turnstileConfig.requiresVerification
+    val hasUsableQrPayload: Boolean = parsedQrPayload != null && !parsedQrPayload.isExpired && qrPayloadError == null
+    val hasAnyWebLoginCredential: Boolean =
+        credentials.accounts.any { it.hasJwt || it.hasClientLoginToken } ||
+            credentials.hasJwt ||
+            credentials.hasClientLoginToken
+    val hasCurrentClientLoginToken: Boolean =
+        credentials.activeAccount?.hasClientLoginToken ?: credentials.hasClientLoginToken
+    val hasStoredAccount: Boolean =
+        credentials.accounts.isNotEmpty() || credentials.hasJwt || credentials.hasClientLoginToken
 }

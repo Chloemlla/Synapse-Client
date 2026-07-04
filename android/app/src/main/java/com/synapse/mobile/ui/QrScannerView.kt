@@ -10,10 +10,13 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -54,12 +57,19 @@ fun PermissionAwareQrScanner(
             onQrCode = onQrCode,
         )
     } else {
-        Box(
+        Column(
             modifier = modifier
                 .fillMaxWidth()
-                .height(220.dp),
-            contentAlignment = Alignment.Center,
+                .height(220.dp)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         ) {
+            Text(
+                text = "需要相机权限才能扫描网页登录二维码。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Button(onClick = { launcher.launch(Manifest.permission.CAMERA) }) {
                 Text("授权相机并扫描")
             }
