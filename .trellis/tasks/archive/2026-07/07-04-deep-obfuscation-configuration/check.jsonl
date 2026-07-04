@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/android/index.md", "reason": "Android quality and verification policy."}
+{"file": ".trellis/spec/android/mobile-login-guidelines.md", "reason": "Confirm CI-only verification and no credential/security regressions."}
+{"file": ".trellis/spec/android/release-obfuscation-guidelines.md", "reason": "Confirm ProGuard/R8 rules stay targeted and minification remains enabled."}
+{"file": ".trellis/tasks/07-04-deep-obfuscation-configuration/research/lumen-obfuscation.md", "reason": "Validate that only applicable Project-Lumen rules were ported."}

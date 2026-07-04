@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/android/index.md", "reason": "Android repository rules and prohibition on local Gradle verification."}
+{"file": ".trellis/spec/android/mobile-login-guidelines.md", "reason": "Android CI, login, credential, QR, Turnstile, and security constraints affected by release obfuscation."}
+{"file": ".trellis/spec/android/release-obfuscation-guidelines.md", "reason": "Release R8/ProGuard shrinking and targeted keep-rule conventions."}
+{"file": ".trellis/tasks/07-04-deep-obfuscation-configuration/research/lumen-obfuscation.md", "reason": "Project-Lumen obfuscation mapping and Synapse-specific rule decisions."}
