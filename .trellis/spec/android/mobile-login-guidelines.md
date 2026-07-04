@@ -97,6 +97,7 @@ Bad: app logs a full JWT or client login token, accepts HTTP `apiBaseUrl`, or co
 
 - Unit test `SynapseQrPayload.parse` for valid payload, wrong scheme/host, missing fields, and non-HTTPS `apiBaseUrl`.
 - Unit test `CertificatePinPolicy.parse` for whitespace/comma separated pins and invalid entries.
+- Do not add `androidTestImplementation` dependencies until real instrumentation tests exist. Unused AndroidX Test/Espresso dependencies still participate in `generateDebugAndroidTestLintModel` and can conflict with dependency lock constraints.
 - CI must run `gradle testDebugUnitTest`, `gradle lintDebug`, and `gradle assembleRelease` from `android/`.
 - CI must upload verification reports and release APK artifact.
 
