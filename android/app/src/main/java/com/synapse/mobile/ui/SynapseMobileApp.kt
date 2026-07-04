@@ -121,7 +121,7 @@ private fun LoginPanel(
             onValueChange = viewModel::updateUsername,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("用户名") },
+            label = { Text("用户名或邮箱") },
         )
         OutlinedTextField(
             value = state.password,
@@ -167,12 +167,50 @@ private fun LoginPanel(
                     Text("获取本客户端 Passkey 认证选项")
                 }
             }
+            if (challenge.methods.any { it.equals("TOTP", ignoreCase = true) }) {
+                OutlinedTextField(
+                    value = state.totpCode,
+                    onValueChange = viewModel::updateTotpCode,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    label = { Text("TOTP 验证码") },
+                )
+                OutlinedTextField(
+                    value = state.backupCode,
+                    onValueChange = viewModel::updateBackupCode,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("备用恢复码") },
+                )
+                Button(
+                    enabled = !state.loading && (state.totpCode.isNotBlank() || state.backupCode.isNotBlank()),
+                    onClick = viewModel::verifyTotp,
+                ) {
+                    Text("完成 TOTP 并登录本客户端")
+                }
+            }
         }
         state.passkeyOptions?.let { options ->
             InfoCard(
                 title = "Passkey 认证选项",
                 lines = options.summaryLines,
             )
+            OutlinedTextField(
+                value = state.passkeyAssertionJson,
+                onValueChange = viewModel::updatePasskeyAssertionJson,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(112.dp),
+                minLines = 2,
+                label = { Text("Passkey assertion response JSON") },
+            )
+            Button(
+                enabled = !state.loading && state.passkeyAssertionJson.isNotBlank(),
+                onClick = viewModel::finishPasskeyAuthentication,
+            ) {
+                Text("完成 Passkey 并登录本客户端")
+            }
         }
         SectionTitle("用网页端 JWT 登录本客户端")
         OutlinedTextField(

@@ -12,11 +12,11 @@ class SynapseMobileLoginApi(
     private val baseUrl: String,
     private val httpClient: OkHttpClient,
 ) {
-    suspend fun standardLogin(username: String, password: String): StandardLoginResult =
+    suspend fun standardLogin(identifier: String, password: String): StandardLoginResult =
         post(
             path = "/api/auth/login",
             body = JSONObject()
-                .put("username", username)
+                .put("identifier", identifier)
                 .put("password", password),
         ) { it.toStandardLoginResult() }
 
@@ -94,11 +94,35 @@ class SynapseMobileLoginApi(
                 .put("clientOrigin", clientOrigin),
         ) { it.toPasskeyAuthenticationStartResult() }
 
-    suspend fun finishPasskeyAuthentication(assertionResponse: JSONObject): PasskeyAuthenticationFinishResult =
+    suspend fun finishPasskeyAuthentication(
+        username: String,
+        response: JSONObject,
+        clientOrigin: String,
+    ): PasskeyAuthenticationFinishResult =
         post(
             path = "/api/passkey/authenticate/finish",
-            body = assertionResponse,
+            body = JSONObject()
+                .put("username", username)
+                .put("response", response)
+                .put("clientOrigin", clientOrigin),
         ) { it.toPasskeyAuthenticationFinishResult() }
+
+    suspend fun verifyTotp(
+        userId: String,
+        pendingToken: String,
+        token: String?,
+        backupCode: String?,
+    ): TotpVerificationResult =
+        post(
+            path = "/api/totp/verify-token",
+            body = JSONObject()
+                .put("userId", userId)
+                .put("pendingToken", pendingToken)
+                .apply {
+                    token?.takeIf { it.isNotBlank() }?.let { put("token", it) }
+                    backupCode?.takeIf { it.isNotBlank() }?.let { put("backupCode", it) }
+                },
+        ) { it.toTotpVerificationResult() }
 
     suspend fun revokeClientToken(jwt: String, clientLoginToken: String): Boolean =
         post(

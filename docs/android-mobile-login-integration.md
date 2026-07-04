@@ -13,7 +13,18 @@ API 地址：https://tts.chloemlla.com
 
 ## 标准登录二次验证
 
-`POST /api/auth/login` 如果账号需要二次验证，会返回短期二次验证 token，而不是正式 JWT。安卓端不能用这个 token 签发客户端登录令牌。
+`POST /api/auth/login` 请求字段是 `identifier` 和 `password`。`identifier` 可为用户名或邮箱；不要发送旧的 `username` 字段，否则 Happy-TTS 后端会返回 `identifier 不能为空`。
+
+请求：
+
+```json
+{
+  "identifier": "alice",
+  "password": "plain password"
+}
+```
+
+如果账号需要二次验证，会返回短期二次验证 token，而不是正式 JWT。安卓端不能用这个 token 签发客户端登录令牌。
 
 示例响应：
 
@@ -33,6 +44,42 @@ API 地址：https://tts.chloemlla.com
 ```
 
 安卓端应保留 `user`、短期 `token` 和 `twoFactorType`，继续走 TOTP 或 Passkey 验证。只有后续接口返回正式 JWT 后，才能调用 `/api/auth/mobile-login/client-token/issue`。
+
+### TOTP 完成认证
+
+`POST /api/totp/verify-token`
+
+请求：
+
+```json
+{
+  "userId": "string",
+  "pendingToken": "short-lived-2fa-token",
+  "token": "123456"
+}
+```
+
+也可使用备用恢复码：
+
+```json
+{
+  "userId": "string",
+  "pendingToken": "short-lived-2fa-token",
+  "backupCode": "recovery-code"
+}
+```
+
+响应：
+
+```json
+{
+  "message": "验证成功",
+  "verified": true,
+  "token": "jwt"
+}
+```
+
+安卓端收到正式 JWT 后应加密保存 JWT，并立即调用客户端登录令牌签发接口。
 
 ### Passkey 开始认证
 
@@ -71,7 +118,22 @@ API 地址：https://tts.chloemlla.com
 
 `POST /api/passkey/authenticate/finish`
 
-安卓端把 Passkey API 返回的 WebAuthn assertion response 发回服务端。验证成功后返回正式 JWT：
+安卓端把 Passkey API 返回的 WebAuthn assertion response 按 `response` 字段发回服务端。请求必须同时包含用户名和客户端 origin：
+
+```json
+{
+  "username": "alice",
+  "response": {
+    "id": "credential-id",
+    "rawId": "credential-id",
+    "type": "public-key",
+    "response": {}
+  },
+  "clientOrigin": "https://tts.chloemlla.com"
+}
+```
+
+验证成功后返回正式 JWT：
 
 ```json
 {
@@ -305,8 +367,8 @@ Content-Type: application/json
 
 首次登录：
 
-1. 调用现有 `/api/auth/login`。
-2. 如果返回 `requires2FA`，继续调用现有 TOTP 或 Passkey 验证接口。
+1. 调用现有 `/api/auth/login`，请求体使用 `identifier` 和 `password`。
+2. 如果返回 `requires2FA`，使用短期 `token` 调用 TOTP 或 Passkey 验证接口取得正式 JWT。
 3. 获得标准 JWT 后调用 `/client-token/issue`。
 4. 安全保存 `clientLoginToken`。
 

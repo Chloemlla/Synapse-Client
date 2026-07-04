@@ -14,6 +14,8 @@ enum class SynapseTab(val label: String) {
 data class SynapseUiState(
     val username: String = "",
     val password: String = "",
+    val totpCode: String = "",
+    val backupCode: String = "",
     val manualJwt: String = "",
     val deviceName: String = "",
     val deviceId: String = "",
@@ -21,6 +23,7 @@ data class SynapseUiState(
     val parsedQrPayload: SynapseQrPayload? = null,
     val pendingTwoFactorChallenge: PendingTwoFactorChallenge? = null,
     val passkeyOptions: PasskeyAuthenticationOptions? = null,
+    val passkeyAssertionJson: String = "",
     val credentials: StoredSynapseCredentials = StoredSynapseCredentials(
         jwt = null,
         clientLoginToken = null,

@@ -11,13 +11,13 @@ class SynapseApiErrorFormatterTest {
             method = "POST",
             url = "https://tts.chloemlla.com/api/auth/login",
             statusCode = 400,
-            requestFields = listOf("username", "password"),
+            requestFields = listOf("identifier", "password"),
             responseText = """
                 {
                   "error": {
                     "message": "输入验证失败",
                     "details": [
-                      { "path": ["username"], "message": "用户名不能为空" },
+                      { "path": ["identifier"], "message": "identifier 不能为空" },
                       { "field": "password", "message": "密码长度不能少于 8 位" }
                     ]
                   }
@@ -28,8 +28,8 @@ class SynapseApiErrorFormatterTest {
         assertTrue(message.contains("输入验证失败"))
         assertTrue(message.contains("API 请求：POST https://tts.chloemlla.com/api/auth/login"))
         assertTrue(message.contains("HTTP 状态：400"))
-        assertTrue(message.contains("请求字段：username, password"))
-        assertTrue(message.contains("username：用户名不能为空"))
+        assertTrue(message.contains("请求字段：identifier, password"))
+        assertTrue(message.contains("identifier：identifier 不能为空"))
         assertTrue(message.contains("password：密码长度不能少于 8 位"))
     }
 

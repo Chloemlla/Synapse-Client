@@ -73,4 +73,21 @@ class JsonMappingsTest {
         assertEquals("alice@example.com", result.user.email)
         assertEquals("", result.user.role)
     }
+
+    @Test
+    fun totpVerificationMapsJwtToken() {
+        val result = JSONObject(
+            """
+            {
+              "message": "验证成功",
+              "verified": true,
+              "token": "jwt-value"
+            }
+            """.trimIndent(),
+        ).toTotpVerificationResult()
+
+        assertTrue(result.verified)
+        assertEquals("jwt-value", result.token)
+        assertEquals("验证成功", result.message)
+    }
 }

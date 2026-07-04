@@ -80,6 +80,15 @@ internal fun JSONObject.toPasskeyAuthenticationFinishResult(): PasskeyAuthentica
     )
 }
 
+internal fun JSONObject.toTotpVerificationResult(): TotpVerificationResult {
+    val data = optJSONObject("data")
+    return TotpVerificationResult(
+        verified = optBoolean("verified", data?.optBoolean("verified", false) == true),
+        token = firstString("token") ?: data?.firstString("token").orEmpty(),
+        message = firstString("message") ?: data?.firstString("message"),
+    )
+}
+
 internal fun JSONObject.toSynapseUser(): SynapseUser =
     SynapseUser(
         id = optString("id"),

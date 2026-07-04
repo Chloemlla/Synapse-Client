@@ -6,7 +6,8 @@ Kotlin Android client for the Synapse mobile login flow described in `../docs/an
 
 The app implements:
 
-* standard username/password login against `/api/auth/login`;
+* standard identifier/password login against `/api/auth/login`;
+* TOTP second-factor verification against `/api/totp/verify-token`;
 * client login token issue/exchange/revoke;
 * `synapse://mobile-login` deep-link parsing;
 * QR scan and manual QR payload entry;

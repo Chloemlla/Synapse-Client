@@ -23,11 +23,12 @@ android/app/src/main/java/com/synapse/mobile/**
 Core Kotlin APIs:
 
 ```kotlin
-SynapseMobileLoginApi.standardLogin(username: String, password: String): StandardLoginResult
+SynapseMobileLoginApi.standardLogin(identifier: String, password: String): StandardLoginResult
 SynapseMobileLoginApi.issueClientToken(jwt: String, deviceId: String, deviceName: String): ClientTokenIssueResult
 SynapseMobileLoginApi.exchangeClientToken(clientLoginToken: String, deviceId: String): JwtExchangeResult
+SynapseMobileLoginApi.verifyTotp(userId: String, pendingToken: String, token: String?, backupCode: String?): TotpVerificationResult
 SynapseMobileLoginApi.startPasskeyAuthentication(username: String, clientOrigin: String): PasskeyAuthenticationStartResult
-SynapseMobileLoginApi.finishPasskeyAuthentication(assertionResponse: JSONObject): PasskeyAuthenticationFinishResult
+SynapseMobileLoginApi.finishPasskeyAuthentication(username: String, response: JSONObject, clientOrigin: String): PasskeyAuthenticationFinishResult
 SynapseMobileLoginApi.markScanned(payload: SynapseQrPayload): MobileLoginStatus
 SynapseMobileLoginApi.confirmWithJwt(payload: SynapseQrPayload, jwt: String): MobileLoginStatus
 SynapseMobileLoginApi.confirmWithClientToken(payload: SynapseQrPayload, clientLoginToken: String, deviceId: String): MobileLoginStatus
@@ -43,6 +44,7 @@ Required API paths:
 
 ```text
 POST /api/auth/login
+POST /api/totp/verify-token
 POST /api/auth/mobile-login/challenge
 POST /api/auth/mobile-login/challenge/scan
 POST /api/auth/mobile-login/challenge/confirm
@@ -56,6 +58,12 @@ POST /api/passkey/authenticate/finish
 
 Standard login `requires2FA` response contract:
 
+Standard login request uses `identifier`, not `username`:
+
+```json
+{ "identifier": "alice-or-email@example.com", "password": "plain password" }
+```
+
 ```json
 {
   "user": { "id": "string", "username": "string", "email": "string", "role": "user" },
@@ -66,6 +74,22 @@ Standard login `requires2FA` response contract:
 ```
 
 The Android client must treat this `token` as a short-lived 2FA token, not a normal JWT, and must not issue a client login token until a TOTP or Passkey finish flow returns a formal JWT.
+
+TOTP finish request/response contract:
+
+```json
+{ "userId": "user-id", "pendingToken": "short-lived-2fa-token", "token": "123456" }
+```
+
+or:
+
+```json
+{ "userId": "user-id", "pendingToken": "short-lived-2fa-token", "backupCode": "recovery-code" }
+```
+
+```json
+{ "verified": true, "token": "jwt", "message": "验证成功" }
+```
 
 Passkey start request/response contract:
 
@@ -85,6 +109,12 @@ Passkey start request/response contract:
 ```
 
 Passkey finish returns:
+
+Passkey finish request wraps the WebAuthn assertion under `response`:
+
+```json
+{ "username": "alice", "response": { "id": "credential-id", "type": "public-key", "response": {} }, "clientOrigin": "https://tts.chloemlla.com" }
+```
 
 ```json
 {
@@ -131,6 +161,7 @@ Credential contract:
 | QR `apiBaseUrl` is not HTTPS | Reject before network request |
 | QR is expired | Reject scan/confirm action |
 | Standard login returns `requires2FA` | Preserve `user`, short-lived token, and `twoFactorType`; do not issue client token until a JWT is available |
+| TOTP verify returns a JWT | Save the JWT encrypted, then issue and save the client login token |
 | Passkey start returns WebAuthn `options` | Keep the raw options for the native/browser assertion flow, but show only a summary; do not display `challenge` or credential IDs in full |
 | Passkey finish returns a JWT | Save the JWT encrypted, then issue and save the client login token |
 | Client token exchange returns 401 | Clear local credentials and require login |
@@ -157,6 +188,7 @@ Error display: if an API response says only `输入验证失败` in the top-leve
 - Unit test `CertificatePinPolicy.parse` for whitespace/comma separated pins and invalid entries.
 - Unit test API error formatting with nested validation details and a negative assertion that request values are not echoed.
 - Unit test standard login JSON mapping for `requires2FA`, short-lived token fallback from `token`, `twoFactorType`, and `user`.
+- Unit test TOTP finish JSON mapping for `verified`, JWT `token`, and `message`.
 - Unit test Passkey start/finish JSON mapping, including `allowCredentials` count and finish responses whose `user` omits `role`.
 - Do not add `androidTestImplementation` dependencies until real instrumentation tests exist. Unused AndroidX Test/Espresso dependencies still participate in `generateDebugAndroidTestLintModel` and can conflict with dependency lock constraints.
 - CameraX `ImageProxy.image` usage must be explicitly marked with AndroidX annotation opt-in, for example `@androidx.annotation.OptIn(markerClass = [ExperimentalGetImage::class])`; Kotlin's standard `@OptIn(ExperimentalGetImage::class)` does not satisfy AndroidX lint. Do not hide this lint error with a baseline.
@@ -173,6 +205,7 @@ Local Gradle commands remain prohibited by repository policy; do not run them fr
 ```kotlin
 Text(credentials.clientLoginToken.orEmpty())
 Log.d("Synapse", "jwt=$jwt")
+JSONObject().put("username", username).put("password", password)
 credentialStore.saveJwt(login.token!!)
 SynapseQrPayload.parse("synapse://mobile-login?apiBaseUrl=http://example.com")
 ```
@@ -181,6 +214,7 @@ SynapseQrPayload.parse("synapse://mobile-login?apiBaseUrl=http://example.com")
 
 ```kotlin
 Text(if (credentials.hasClientLoginToken) "已保存" else "未保存")
+JSONObject().put("identifier", identifier).put("password", password)
 if (login.requiresTwoFactor) return PendingTwoFactorChallenge(login.user, login.twoFactorToken, login.twoFactorTypes)
 require(apiBaseUrl.startsWith("https://"))
 credentialStore.saveClientLoginToken(clientLoginToken)

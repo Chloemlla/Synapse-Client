@@ -83,11 +83,18 @@ class SynapseAuthRepository(
     }
 
     suspend fun finishPasskeyAuthentication(
+        username: String,
         assertionResponse: JSONObject,
         deviceName: String,
     ): LoginOutcome.Authenticated {
+        val normalizedUsername = username.trim()
+        require(normalizedUsername.isNotBlank()) { "Username is required." }
         val api = apiFor(defaultBaseUrl)
-        val result = api.finishPasskeyAuthentication(assertionResponse)
+        val result = api.finishPasskeyAuthentication(
+            username = normalizedUsername,
+            response = assertionResponse,
+            clientOrigin = defaultBaseUrl.trim().trimEnd('/'),
+        )
         require(result.token.isNotBlank()) { "Passkey response did not include a JWT." }
         credentialStore.saveJwt(result.token, result.user)
 
@@ -100,6 +107,46 @@ class SynapseAuthRepository(
 
         return LoginOutcome.Authenticated(
             user = result.user,
+            clientTokenExpiresAt = issued.expiresAt,
+        )
+    }
+
+    suspend fun verifyTotpAndIssueClientToken(
+        challenge: PendingTwoFactorChallenge,
+        token: String?,
+        backupCode: String?,
+        deviceName: String,
+    ): LoginOutcome.Authenticated {
+        val user = challenge.user ?: throw IllegalStateException("Two-factor response did not include a user.")
+        val pendingToken = challenge.token?.takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("Two-factor response did not include a pending token.")
+        val cleanToken = token?.trim().orEmpty()
+        val cleanBackupCode = backupCode?.trim().orEmpty()
+        require(cleanToken.isNotBlank() || cleanBackupCode.isNotBlank()) {
+            "TOTP code or backup code is required."
+        }
+
+        val api = apiFor(defaultBaseUrl)
+        val result = api.verifyTotp(
+            userId = user.id,
+            pendingToken = pendingToken,
+            token = cleanToken.takeIf { it.isNotBlank() },
+            backupCode = cleanBackupCode.takeIf { it.isNotBlank() },
+        )
+        require(result.token.isNotBlank()) {
+            result.message ?: "TOTP verification response did not include a JWT."
+        }
+        credentialStore.saveJwt(result.token, user)
+
+        val issued = api.issueClientToken(
+            jwt = result.token,
+            deviceId = deviceId.getOrCreate(),
+            deviceName = deviceName.ifBlank { defaultDeviceName() },
+        )
+        credentialStore.saveClientLoginToken(issued.clientLoginToken)
+
+        return LoginOutcome.Authenticated(
+            user = user,
             clientTokenExpiresAt = issued.expiresAt,
         )
     }

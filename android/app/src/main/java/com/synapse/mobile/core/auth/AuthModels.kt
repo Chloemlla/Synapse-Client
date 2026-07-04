@@ -83,6 +83,12 @@ data class PasskeyAuthenticationFinishResult(
     val user: SynapseUser,
 )
 
+data class TotpVerificationResult(
+    val verified: Boolean,
+    val token: String,
+    val message: String?,
+)
+
 data class StoredSynapseCredentials(
     val jwt: String?,
     val clientLoginToken: String?,
