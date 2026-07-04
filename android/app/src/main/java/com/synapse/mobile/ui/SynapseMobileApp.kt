@@ -8,10 +8,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -24,6 +26,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -143,8 +146,19 @@ private fun LoginPanel(
             singleLine = true,
             label = { Text("设备名称") },
         )
+        TurnstileVerificationPanel(
+            state = state,
+            onVerified = viewModel::handleTurnstileVerify,
+            onExpired = viewModel::handleTurnstileExpire,
+            onError = viewModel::handleTurnstileError,
+            onRetryWidget = viewModel::retryTurnstile,
+            onReloadConfig = viewModel::loadTurnstileConfig,
+        )
         Button(
-            enabled = !state.loading,
+            enabled = !state.loading &&
+                !state.turnstileConfigLoading &&
+                state.turnstileConfigError == null &&
+                (!state.requiresHumanVerification || state.turnstileVerified),
             onClick = viewModel::login,
         ) {
             Text("登录本客户端并签发令牌")
@@ -296,6 +310,99 @@ private fun QrPanel(
             onClick = viewModel::confirmQrLogin,
         ) {
             Text("确认登录网页端")
+        }
+
+        if (state.showWebLoginAccountPicker) {
+            WebLoginAccountPickerDialog(
+                state = state,
+                onSelectAccount = viewModel::confirmQrLoginWithAccount,
+                onDismiss = viewModel::dismissWebLoginAccountPicker,
+            )
+        }
+    }
+}
+
+@Composable
+private fun WebLoginAccountPickerDialog(
+    state: SynapseUiState,
+    onSelectAccount: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val targetSite = state.parsedQrPayload?.apiBaseUrl ?: "当前网页登录请求"
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择网页登录账号") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = "目标站点：$targetSite",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = "请选择用于继续网页登录的本客户端账号。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                state.credentials.accounts.forEach { account ->
+                    WebLoginAccountChoice(
+                        account = account,
+                        active = account.accountId == state.credentials.activeAccountId,
+                        enabled = !state.loading && (account.hasJwt || account.hasClientLoginToken),
+                        onSelect = { onSelectAccount(account.accountId) },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+    )
+}
+
+@Composable
+private fun WebLoginAccountChoice(
+    account: StoredSynapseAccount,
+    active: Boolean,
+    enabled: Boolean,
+    onSelect: () -> Unit,
+) {
+    val credentialLabel = when {
+        account.hasJwt && account.hasClientLoginToken -> "可用凭据：JWT + SML"
+        account.hasJwt -> "可用凭据：JWT"
+        account.hasClientLoginToken -> "可用凭据：SML"
+        else -> "无可用网页登录凭据"
+    }
+    OutlinedButton(
+        modifier = Modifier.fillMaxWidth(),
+        enabled = enabled,
+        onClick = onSelect,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = if (active) "当前：${account.displayName}" else account.displayName,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = account.email ?: account.userId ?: account.accountId,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = credentialLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

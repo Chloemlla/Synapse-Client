@@ -4,6 +4,7 @@ import com.synapse.mobile.core.auth.PasskeyAuthenticationOptions
 import com.synapse.mobile.core.auth.PendingTwoFactorChallenge
 import com.synapse.mobile.core.auth.StoredSynapseCredentials
 import com.synapse.mobile.core.auth.SynapseQrPayload
+import com.synapse.mobile.core.auth.TurnstilePublicConfig
 
 enum class SynapseTab(val label: String) {
     Login("本客户端登录"),
@@ -25,6 +26,14 @@ data class SynapseUiState(
     val pendingTwoFactorChallenge: PendingTwoFactorChallenge? = null,
     val passkeyOptions: PasskeyAuthenticationOptions? = null,
     val passkeyAssertionJson: String = "",
+    val turnstileConfig: TurnstilePublicConfig = TurnstilePublicConfig(enabled = false, siteKey = null),
+    val turnstileConfigLoading: Boolean = true,
+    val turnstileConfigError: String? = null,
+    val turnstileToken: String = "",
+    val turnstileVerified: Boolean = false,
+    val turnstileError: Boolean = false,
+    val turnstileWidgetKey: Int = 0,
+    val turnstilePageBaseUrl: String = "",
     val credentials: StoredSynapseCredentials = StoredSynapseCredentials(
         jwt = null,
         clientLoginToken = null,
@@ -37,6 +46,9 @@ data class SynapseUiState(
     ),
     val loading: Boolean = false,
     val showScanner: Boolean = false,
+    val showWebLoginAccountPicker: Boolean = false,
     val status: String = "",
     val error: String? = null,
-)
+) {
+    val requiresHumanVerification: Boolean = turnstileConfig.requiresVerification
+}

@@ -11,6 +11,25 @@ API 地址：https://tts.chloemlla.com
 
 网页扫码登录由 Web 端创建短期挑战，安卓端扫描二维码并确认，Web 端轮询拿到标准 JWT 后进入登录态。
 
+## 标准登录人机验证
+
+安卓端在展示“登录本客户端并签发令牌”前应先读取 Happy-TTS 兼容的公共 Turnstile 配置：
+
+`GET /api/turnstile/public-config`
+
+示例响应：
+
+```json
+{
+  "enabled": true,
+  "siteKey": "0x4AAAA-public-site-key",
+  "hcaptchaEnabled": false,
+  "hcaptchaSiteKey": null
+}
+```
+
+当 `enabled=true` 且 `siteKey` 存在时，客户端必须先加载 Turnstile widget。用户完成验证后，把 widget 返回的一次性 token 作为 `/api/auth/login` 的 `cfToken` 字段提交。登录失败、token 过期或 widget 报错后，应清空本地 token 并重新加载 widget；不得保存、显示或记录该 token。
+
 ## 标准登录二次验证
 
 `POST /api/auth/login` 请求字段是 `identifier` 和 `password`。`identifier` 可为用户名或邮箱；不要发送旧的 `username` 字段，否则 Happy-TTS 后端会返回 `identifier 不能为空`。
@@ -20,7 +39,8 @@ API 地址：https://tts.chloemlla.com
 ```json
 {
   "identifier": "alice",
-  "password": "plain password"
+  "password": "plain password",
+  "cfToken": "turnstile-widget-token"
 }
 ```
 
@@ -316,7 +336,7 @@ Content-Type: application/json
 
 安卓端使用手动 JWT 授权时，必须先调用 `GET /api/auth/me` 获取 JWT 对应的真实用户，再调用 `/api/auth/mobile-login/client-token/issue` 签发该用户的 `sml_` 客户端登录令牌。客户端需要持久化保存 `clientLoginToken` 和后端返回的 `expiresAt`。
 
-安卓端可以同时保存多个账号的客户端登录令牌。每次成功登录或二次验证后，按后端返回的用户 ID 更新对应账号；扫码确认、静默登录、撤销和清理操作只作用于当前选中的账号。
+安卓端可以同时保存多个账号的客户端登录令牌。每次成功登录或二次验证后，按后端返回的用户 ID 更新对应账号；静默登录、撤销和清理操作只作用于当前选中的账号。扫码确认网页登录时，如果本地保存了多个账号，客户端必须先弹窗列出账号身份和可用凭据状态，由用户选择继续网页登录的账号；选择后把该账号设为当前账号，再调用 `/challenge/confirm`。弹窗不得展示或复制 JWT、`clientLoginToken` 或二维码 `scanToken`。
 
 ### 客户端令牌兑换 JWT
 
@@ -391,7 +411,8 @@ Content-Type: application/json
 1. 扫描 Web 登录页二维码并解析 deep link。
 2. 调用 `/challenge/scan` 标记已扫码。
 3. 展示确认页，确认目标站点 `apiBaseUrl`、当前选中账号和设备 ID。
-4. 调用 `/challenge/confirm`，优先使用当前 JWT；JWT 不存在或过期时可使用 `clientLoginToken`。
+4. 如果客户端已保存多个账号，弹窗选择用于继续网页登录的账号，选择后切换当前账号。
+5. 调用 `/challenge/confirm`，优先使用当前 JWT；JWT 不存在或过期时可使用 `clientLoginToken`。
 
 ## 错误与状态
 

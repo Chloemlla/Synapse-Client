@@ -2,6 +2,7 @@ package com.synapse.mobile.core.auth
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -29,6 +30,55 @@ class JsonMappingsTest {
         assertEquals("short-two-factor-token", result.twoFactorToken)
         assertEquals(listOf("TOTP", "Passkey"), result.twoFactorTypes)
         assertEquals("alice", result.user?.username)
+    }
+
+    @Test
+    fun turnstilePublicConfigRequiresEnabledSiteKey() {
+        val result = JSONObject(
+            """
+            {
+              "enabled": true,
+              "siteKey": "0x4AAAA-public-site-key",
+              "hcaptchaEnabled": false,
+              "hcaptchaSiteKey": null
+            }
+            """.trimIndent(),
+        ).toTurnstilePublicConfig()
+
+        assertTrue(result.requiresVerification)
+        assertEquals("0x4AAAA-public-site-key", result.siteKey)
+    }
+
+    @Test
+    fun turnstilePublicConfigDisablesWhenSiteKeyIsMissing() {
+        val result = JSONObject(
+            """
+            {
+              "enabled": true,
+              "siteKey": ""
+            }
+            """.trimIndent(),
+        ).toTurnstilePublicConfig()
+
+        assertFalse(result.requiresVerification)
+        assertEquals(null, result.siteKey)
+    }
+
+    @Test
+    fun turnstilePublicConfigMapsNestedConfig() {
+        val result = JSONObject(
+            """
+            {
+              "config": {
+                "enabled": true,
+                "siteKey": "0x4AAAA-nested-site-key"
+              }
+            }
+            """.trimIndent(),
+        ).toTurnstilePublicConfig()
+
+        assertTrue(result.requiresVerification)
+        assertEquals("0x4AAAA-nested-site-key", result.siteKey)
     }
 
     @Test

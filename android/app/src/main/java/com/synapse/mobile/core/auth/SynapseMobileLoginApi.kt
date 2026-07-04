@@ -12,13 +12,23 @@ class SynapseMobileLoginApi(
     private val baseUrl: String,
     private val httpClient: OkHttpClient,
 ) {
-    suspend fun standardLogin(identifier: String, password: String): StandardLoginResult =
+    suspend fun standardLogin(identifier: String, password: String, cfToken: String? = null): StandardLoginResult =
         post(
             path = "/api/auth/login",
             body = JSONObject()
                 .put("identifier", identifier)
-                .put("password", password),
+                .put("password", password)
+                .apply {
+                    cfToken
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { put("cfToken", it) }
+                },
         ) { it.toStandardLoginResult() }
+
+    suspend fun getTurnstilePublicConfig(): TurnstilePublicConfig =
+        get(
+            path = "/api/turnstile/public-config",
+        ) { it.toTurnstilePublicConfig() }
 
     suspend fun createChallenge(): MobileLoginChallenge =
         post(

@@ -21,6 +21,7 @@ class SynapseLoginViewModel(
             deviceName = repository.defaultDeviceName(),
             deviceId = repository.deviceId(),
             credentials = repository.credentials(),
+            turnstilePageBaseUrl = repository.apiOrigin(),
         ),
     )
     val state: StateFlow<SynapseUiState> = mutableState.asStateFlow()
@@ -34,6 +35,7 @@ class SynapseLoginViewModel(
                 )
             }
         }
+        loadTurnstileConfig()
     }
 
     fun selectTab(tab: SynapseTab) {
@@ -104,6 +106,84 @@ class SynapseLoginViewModel(
         mutableState.update { it.copy(passkeyAssertionJson = value, error = null) }
     }
 
+    fun loadTurnstileConfig() {
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(
+                    turnstileConfigLoading = true,
+                    turnstileConfigError = null,
+                    turnstileToken = "",
+                    turnstileVerified = false,
+                    turnstileError = false,
+                )
+            }
+            runCatching { repository.getTurnstilePublicConfig() }
+                .onSuccess { config ->
+                    mutableState.update {
+                        it.copy(
+                            turnstileConfig = config,
+                            turnstileConfigLoading = false,
+                            turnstileConfigError = null,
+                            turnstileToken = "",
+                            turnstileVerified = false,
+                            turnstileError = false,
+                            turnstileWidgetKey = if (config.requiresVerification) {
+                                it.turnstileWidgetKey + 1
+                            } else {
+                                it.turnstileWidgetKey
+                            },
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(
+                            turnstileConfigLoading = false,
+                            turnstileConfigError = error.message ?: "获取人机验证配置失败",
+                            turnstileToken = "",
+                            turnstileVerified = false,
+                            turnstileError = false,
+                        )
+                    }
+                }
+        }
+    }
+
+    fun handleTurnstileVerify(token: String) {
+        mutableState.update {
+            it.copy(
+                turnstileToken = token,
+                turnstileVerified = token.isNotBlank(),
+                turnstileError = false,
+                error = null,
+            )
+        }
+    }
+
+    fun handleTurnstileExpire() {
+        mutableState.update {
+            it.copy(
+                turnstileToken = "",
+                turnstileVerified = false,
+                turnstileError = false,
+            )
+        }
+    }
+
+    fun handleTurnstileError() {
+        mutableState.update {
+            it.copy(
+                turnstileToken = "",
+                turnstileVerified = false,
+                turnstileError = true,
+            )
+        }
+    }
+
+    fun retryTurnstile() {
+        mutableState.update { it.resetTurnstileChallenge() }
+    }
+
     fun updateManualJwt(value: String) {
         mutableState.update { it.copy(manualJwt = value, error = null) }
     }
@@ -139,18 +219,31 @@ class SynapseLoginViewModel(
             mutableState.update { it.copy(error = "请输入用户名和密码。") }
             return
         }
+        if (current.turnstileConfigLoading) {
+            mutableState.update { it.copy(error = "正在加载人机验证配置，请稍候。") }
+            return
+        }
+        if (current.turnstileConfigError != null) {
+            mutableState.update { it.copy(error = "请先重新加载人机验证配置。") }
+            return
+        }
+        if (current.requiresHumanVerification && (!current.turnstileVerified || current.turnstileToken.isBlank())) {
+            mutableState.update { it.copy(error = "请先完成人机验证。") }
+            return
+        }
 
-        launchAction {
+        launchAction(resetTurnstileOnFailure = current.requiresHumanVerification) {
             when (
                 val result = repository.standardLoginAndIssueClientToken(
                     username = current.username,
                     password = current.password,
                     deviceName = current.deviceName,
+                    cfToken = current.turnstileToken.takeIf { current.requiresHumanVerification },
                 )
             ) {
                 is LoginOutcome.Authenticated -> {
                     mutableState.update {
-                        it.copy(
+                        it.resetTurnstileChallenge().copy(
                             pendingTwoFactorChallenge = null,
                             passkeyOptions = null,
                             passkeyAssertionJson = "",
@@ -162,7 +255,7 @@ class SynapseLoginViewModel(
 
                 is LoginOutcome.TwoFactorRequired -> {
                     mutableState.update {
-                        it.copy(
+                        it.resetTurnstileChallenge().copy(
                             pendingTwoFactorChallenge = result.challenge,
                             passkeyOptions = null,
                             passkeyAssertionJson = "",
@@ -307,6 +400,62 @@ class SynapseLoginViewModel(
             mutableState.update { it.copy(error = "请先扫描或粘贴网页登录二维码 payload。") }
             return
         }
+        val accounts = state.value.credentials.accounts
+        if (accounts.size > 1) {
+            mutableState.update {
+                it.copy(
+                    showWebLoginAccountPicker = true,
+                    error = null,
+                    status = "",
+                )
+            }
+            return
+        }
+
+        confirmQrLoginWithSelectedAccount()
+    }
+
+    fun dismissWebLoginAccountPicker() {
+        mutableState.update { it.copy(showWebLoginAccountPicker = false) }
+    }
+
+    fun confirmQrLoginWithAccount(accountId: String) {
+        val rawPayload = state.value.manualQrPayload
+        if (rawPayload.isBlank()) {
+            mutableState.update {
+                it.copy(
+                    showWebLoginAccountPicker = false,
+                    error = "请先扫描或粘贴网页登录二维码 payload。",
+                )
+            }
+            return
+        }
+
+        runCatching { repository.selectAccount(accountId) }
+            .onSuccess { credentials ->
+                mutableState.update {
+                    it.copy(
+                        showWebLoginAccountPicker = false,
+                        credentials = credentials,
+                        error = null,
+                        status = "",
+                    )
+                }
+                confirmQrLoginWithSelectedAccount()
+            }
+            .onFailure { error ->
+                mutableState.update {
+                    it.copy(
+                        showWebLoginAccountPicker = false,
+                        credentials = repository.credentials(),
+                        error = error.message ?: error::class.java.simpleName,
+                    )
+                }
+            }
+    }
+
+    private fun confirmQrLoginWithSelectedAccount() {
+        val rawPayload = state.value.manualQrPayload
 
         launchAction {
             val result = repository.confirmQrLogin(rawPayload)
@@ -337,7 +486,7 @@ class SynapseLoginViewModel(
         }
     }
 
-    private fun launchAction(action: suspend () -> String) {
+    private fun launchAction(resetTurnstileOnFailure: Boolean = false, action: suspend () -> String) {
         viewModelScope.launch {
             mutableState.update { it.copy(loading = true, error = null, status = "") }
             runCatching { action() }
@@ -353,15 +502,32 @@ class SynapseLoginViewModel(
                 }
                 .onFailure { error ->
                     mutableState.update {
-                        it.copy(
+                        val next = if (resetTurnstileOnFailure) it.resetTurnstileChallenge() else it
+                        next.copy(
                             loading = false,
                             credentials = repository.credentials(),
                             error = error.message ?: error::class.java.simpleName,
                         )
                     }
-                }
+            }
         }
     }
+
+    private fun SynapseUiState.resetTurnstileChallenge(): SynapseUiState =
+        if (requiresHumanVerification) {
+            copy(
+                turnstileToken = "",
+                turnstileVerified = false,
+                turnstileError = false,
+                turnstileWidgetKey = turnstileWidgetKey + 1,
+            )
+        } else {
+            copy(
+                turnstileToken = "",
+                turnstileVerified = false,
+                turnstileError = false,
+            )
+        }
 
     class Factory(
         private val repository: SynapseAuthRepository,

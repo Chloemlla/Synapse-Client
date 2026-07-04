@@ -31,13 +31,19 @@ class SynapseAuthRepository(
 
     fun deviceId(): String = deviceId.getOrCreate()
 
+    fun apiOrigin(): String = defaultBaseUrl.trim().trimEnd('/')
+
+    suspend fun getTurnstilePublicConfig(): TurnstilePublicConfig =
+        apiFor(defaultBaseUrl).getTurnstilePublicConfig()
+
     suspend fun standardLoginAndIssueClientToken(
         username: String,
         password: String,
         deviceName: String,
+        cfToken: String? = null,
     ): LoginOutcome {
         val api = apiFor(defaultBaseUrl)
-        val login = api.standardLogin(username.trim(), password)
+        val login = api.standardLogin(username.trim(), password, cfToken)
         if (login.requiresTwoFactor) {
             return LoginOutcome.TwoFactorRequired(
                 message = login.message,

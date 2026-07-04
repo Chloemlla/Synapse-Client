@@ -20,6 +20,13 @@ data class StandardLoginResult(
     val user: SynapseUser?,
 )
 
+data class TurnstilePublicConfig(
+    val enabled: Boolean,
+    val siteKey: String?,
+) {
+    val requiresVerification: Boolean = enabled && !siteKey.isNullOrBlank()
+}
+
 data class PendingTwoFactorChallenge(
     val user: SynapseUser?,
     val token: String?,

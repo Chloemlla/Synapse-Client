@@ -25,6 +25,18 @@ internal fun JSONObject.toStandardLoginResult(): StandardLoginResult {
     )
 }
 
+internal fun JSONObject.toTurnstilePublicConfig(): TurnstilePublicConfig {
+    val configJson = optJSONObject("config") ?: optJSONObject("data")
+    val siteKey = (firstString("siteKey") ?: configJson?.firstString("siteKey"))
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+    val enabled = optBoolean("enabled", configJson?.optBoolean("enabled", false) == true)
+    return TurnstilePublicConfig(
+        enabled = enabled && !siteKey.isNullOrBlank(),
+        siteKey = siteKey,
+    )
+}
+
 internal fun JSONObject.toMobileLoginChallenge(): MobileLoginChallenge =
     MobileLoginChallenge(
         success = optBoolean("success"),
