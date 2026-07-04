@@ -6,7 +6,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Response
 import org.json.JSONObject
 
 class SynapseMobileLoginApi(
@@ -101,6 +100,7 @@ class SynapseMobileLoginApi(
         parse: (JSONObject) -> T,
     ): T = withContext(Dispatchers.IO) {
         val bodyText = body.toString()
+        val requestFields = body.keys().asSequence().toList()
         val request = Request.Builder()
             .url(resolveUrl(path))
             .post(bodyText.toRequestBody(JSON_MEDIA_TYPE))
@@ -117,7 +117,16 @@ class SynapseMobileLoginApi(
         httpClient.newCall(request).execute().use { response ->
             val responseText = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw SynapseApiException(response.code, errorMessage(response, responseText))
+                throw SynapseApiException(
+                    response.code,
+                    SynapseApiErrorFormatter.failureMessage(
+                        method = request.method,
+                        url = request.url.toString(),
+                        statusCode = response.code,
+                        requestFields = requestFields,
+                        responseText = responseText,
+                    ),
+                )
             }
             parse(responseText.toJsonObject())
         }
@@ -125,13 +134,6 @@ class SynapseMobileLoginApi(
 
     private fun resolveUrl(path: String): String =
         "${baseUrl.trim().trimEnd('/')}/${path.trimStart('/')}"
-
-    private fun errorMessage(response: Response, responseText: String): String {
-        val json = runCatching { JSONObject(responseText) }.getOrNull()
-        return json?.firstString("message")
-            ?: json?.optJSONObject("error")?.firstString("message")
-            ?: "Synapse API request failed with HTTP ${response.code}."
-    }
 
     private fun String.toJsonObject(): JSONObject {
         if (isBlank()) return JSONObject()

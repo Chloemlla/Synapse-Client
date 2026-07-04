@@ -84,6 +84,7 @@ Credential contract:
 | JWT confirm returns 401 and client token exists | Clear local JWT and retry confirm with client token |
 | Revoke succeeds with `revoked=true` | Clear local credentials |
 | Missing certificate pins while pins are required | Fail OkHttp client creation |
+| API returns validation details in `details`, `errors`, or `issues` | Show the backend message plus field-level reasons, HTTP status, method, URL, and request field names; never echo request values such as passwords, JWTs, `clientLoginToken`, or `scanToken` |
 
 ### 5. Good/Base/Bad Cases
 
@@ -93,10 +94,13 @@ Base: user has a `clientLoginToken` but no JWT; app exchanges it at startup and 
 
 Bad: app logs a full JWT or client login token, accepts HTTP `apiBaseUrl`, or confirms a QR login without showing the target site.
 
+Error display: if an API response says only `输入验证失败` in the top-level message but includes nested field errors, the app must surface those field errors to the user. The diagnostic request context may include `POST https://.../api/...`, HTTP status, and submitted field names only; it must not include submitted values.
+
 ### 6. Tests Required
 
 - Unit test `SynapseQrPayload.parse` for valid payload, wrong scheme/host, missing fields, and non-HTTPS `apiBaseUrl`.
 - Unit test `CertificatePinPolicy.parse` for whitespace/comma separated pins and invalid entries.
+- Unit test API error formatting with nested validation details and a negative assertion that request values are not echoed.
 - Do not add `androidTestImplementation` dependencies until real instrumentation tests exist. Unused AndroidX Test/Espresso dependencies still participate in `generateDebugAndroidTestLintModel` and can conflict with dependency lock constraints.
 - CameraX `ImageProxy.image` usage must be explicitly marked with AndroidX annotation opt-in, for example `@androidx.annotation.OptIn(markerClass = [ExperimentalGetImage::class])`; Kotlin's standard `@OptIn(ExperimentalGetImage::class)` does not satisfy AndroidX lint. Do not hide this lint error with a baseline.
 - CI must run `gradle testDebugUnitTest`, `gradle lintDebug`, and `gradle assembleRelease` from `android/`.
