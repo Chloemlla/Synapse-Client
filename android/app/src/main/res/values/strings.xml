@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Synapse Mobile</string>
+    <string name="camera_permission_required">Camera permission is required to scan login QR codes.</string>
+</resources>

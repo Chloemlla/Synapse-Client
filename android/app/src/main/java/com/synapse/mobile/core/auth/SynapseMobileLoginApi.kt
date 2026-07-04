@@ -1,0 +1,145 @@
+package com.synapse.mobile.core.auth
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import org.json.JSONObject
+
+class SynapseMobileLoginApi(
+    private val baseUrl: String,
+    private val httpClient: OkHttpClient,
+) {
+    suspend fun standardLogin(username: String, password: String): StandardLoginResult =
+        post(
+            path = "/api/auth/login",
+            body = JSONObject()
+                .put("username", username)
+                .put("password", password),
+        ) { it.toStandardLoginResult() }
+
+    suspend fun createChallenge(): MobileLoginChallenge =
+        post(
+            path = "/api/auth/mobile-login/challenge",
+            body = JSONObject(),
+        ) { it.toMobileLoginChallenge() }
+
+    suspend fun markScanned(payload: SynapseQrPayload): MobileLoginStatus =
+        post(
+            path = "/api/auth/mobile-login/challenge/scan",
+            body = JSONObject()
+                .put("sessionId", payload.sessionId)
+                .put("scanToken", payload.scanToken),
+        ) { it.toMobileLoginStatus() }
+
+    suspend fun confirmWithJwt(payload: SynapseQrPayload, jwt: String): MobileLoginStatus =
+        post(
+            path = "/api/auth/mobile-login/challenge/confirm",
+            bearerToken = jwt,
+            body = JSONObject()
+                .put("sessionId", payload.sessionId)
+                .put("scanToken", payload.scanToken),
+        ) { it.toMobileLoginStatus() }
+
+    suspend fun confirmWithClientToken(
+        payload: SynapseQrPayload,
+        clientLoginToken: String,
+        deviceId: String,
+    ): MobileLoginStatus =
+        post(
+            path = "/api/auth/mobile-login/challenge/confirm",
+            body = JSONObject()
+                .put("sessionId", payload.sessionId)
+                .put("scanToken", payload.scanToken)
+                .put("clientLoginToken", clientLoginToken)
+                .put("deviceId", deviceId),
+        ) { it.toMobileLoginStatus() }
+
+    suspend fun pollChallenge(sessionId: String, pollToken: String): MobileLoginStatus =
+        post(
+            path = "/api/auth/mobile-login/challenge/poll",
+            body = JSONObject()
+                .put("sessionId", sessionId)
+                .put("pollToken", pollToken),
+        ) { it.toMobileLoginStatus() }
+
+    suspend fun issueClientToken(
+        jwt: String,
+        deviceId: String,
+        deviceName: String,
+    ): ClientTokenIssueResult =
+        post(
+            path = "/api/auth/mobile-login/client-token/issue",
+            bearerToken = jwt,
+            body = JSONObject()
+                .put("deviceId", deviceId)
+                .put("deviceName", deviceName),
+        ) { it.toClientTokenIssueResult() }
+
+    suspend fun exchangeClientToken(clientLoginToken: String, deviceId: String): JwtExchangeResult =
+        post(
+            path = "/api/auth/mobile-login/client-token/exchange",
+            body = JSONObject()
+                .put("clientLoginToken", clientLoginToken)
+                .put("deviceId", deviceId),
+        ) { it.toJwtExchangeResult() }
+
+    suspend fun revokeClientToken(jwt: String, clientLoginToken: String): Boolean =
+        post(
+            path = "/api/auth/mobile-login/client-token/revoke",
+            bearerToken = jwt,
+            body = JSONObject().put("clientLoginToken", clientLoginToken),
+        ) { it.optBoolean("revoked") }
+
+    private suspend fun <T> post(
+        path: String,
+        body: JSONObject,
+        bearerToken: String? = null,
+        parse: (JSONObject) -> T,
+    ): T = withContext(Dispatchers.IO) {
+        val bodyText = body.toString()
+        val request = Request.Builder()
+            .url(resolveUrl(path))
+            .post(bodyText.toRequestBody(JSON_MEDIA_TYPE))
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .header("User-Agent", USER_AGENT)
+            .apply {
+                bearerToken
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { header("Authorization", "Bearer $it") }
+            }
+            .build()
+
+        httpClient.newCall(request).execute().use { response ->
+            val responseText = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw SynapseApiException(response.code, errorMessage(response, responseText))
+            }
+            parse(responseText.toJsonObject())
+        }
+    }
+
+    private fun resolveUrl(path: String): String =
+        "${baseUrl.trim().trimEnd('/')}/${path.trimStart('/')}"
+
+    private fun errorMessage(response: Response, responseText: String): String {
+        val json = runCatching { JSONObject(responseText) }.getOrNull()
+        return json?.firstString("message")
+            ?: json?.optJSONObject("error")?.firstString("message")
+            ?: "Synapse API request failed with HTTP ${response.code}."
+    }
+
+    private fun String.toJsonObject(): JSONObject {
+        if (isBlank()) return JSONObject()
+        return JSONObject(this)
+    }
+
+    private companion object {
+        private const val USER_AGENT = "Synapse-Mobile-Android"
+        private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+    }
+}
