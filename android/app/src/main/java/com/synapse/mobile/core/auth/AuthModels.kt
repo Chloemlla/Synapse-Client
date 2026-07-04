@@ -57,7 +57,18 @@ data class StoredSynapseCredentials(
 ) {
     val hasJwt: Boolean = !jwt.isNullOrBlank()
     val hasClientLoginToken: Boolean = !clientLoginToken.isNullOrBlank()
+    val clientLoginTokenPreview: String? = clientLoginToken.toSensitiveTokenPreview()
 }
+
+fun String?.toSensitiveTokenPreview(): String? {
+    val token = this?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    if (token.length <= TOKEN_PREVIEW_VISIBLE_CHARS) return "已保存"
+    return "${token.take(TOKEN_PREVIEW_PREFIX_CHARS)}...${token.takeLast(TOKEN_PREVIEW_SUFFIX_CHARS)}"
+}
+
+private const val TOKEN_PREVIEW_PREFIX_CHARS = 4
+private const val TOKEN_PREVIEW_SUFFIX_CHARS = 6
+private const val TOKEN_PREVIEW_VISIBLE_CHARS = TOKEN_PREVIEW_PREFIX_CHARS + TOKEN_PREVIEW_SUFFIX_CHARS
 
 data class SynapseQrPayload(
     val sessionId: String,

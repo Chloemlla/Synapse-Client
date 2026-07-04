@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.synapse.mobile.core.auth.LoginOutcome
 import com.synapse.mobile.core.auth.SynapseAuthRepository
 import com.synapse.mobile.core.auth.SynapseQrPayload
+import com.synapse.mobile.core.auth.toSensitiveTokenPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,7 +79,8 @@ class SynapseLoginViewModel(
             ) {
                 is LoginOutcome.Authenticated -> {
                     val name = result.user?.username?.takeIf { it.isNotBlank() } ?: current.username
-                    "登录成功，已签发客户端登录令牌。当前账号：$name"
+                    val tokenPreview = repository.credentials().clientLoginToken.toSensitiveTokenPreview()
+                    "登录成功，已签发客户端登录令牌${tokenPreview?.let { "：$it" }.orEmpty()}。当前账号：$name"
                 }
 
                 is LoginOutcome.TwoFactorRequired -> {
@@ -107,7 +109,8 @@ class SynapseLoginViewModel(
                 jwt = current.manualJwt,
                 deviceName = current.deviceName,
             )
-            "客户端登录令牌已签发，过期时间：${issued.expiresAt}"
+            val tokenPreview = issued.clientLoginToken.toSensitiveTokenPreview()
+            "客户端登录令牌已签发${tokenPreview?.let { "：$it" }.orEmpty()}，过期时间：${issued.expiresAt}"
         }
     }
 

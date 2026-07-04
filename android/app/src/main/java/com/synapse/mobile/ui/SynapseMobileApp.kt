@@ -242,7 +242,7 @@ private fun SessionPanel(
                 "Device ID：${state.deviceId}",
                 "当前账号：${state.credentials.username ?: state.credentials.email ?: "未登录"}",
                 "JWT：${if (state.credentials.hasJwt) "已保存" else "未保存"}",
-                "客户端登录令牌：${if (state.credentials.hasClientLoginToken) "已保存" else "未保存"}",
+                "客户端登录令牌：${state.credentials.clientLoginTokenPreview ?: "未保存"}",
             ),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
