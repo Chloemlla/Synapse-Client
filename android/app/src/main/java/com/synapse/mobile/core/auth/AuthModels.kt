@@ -15,9 +15,19 @@ data class StandardLoginResult(
     val token: String?,
     val requiresTwoFactor: Boolean,
     val twoFactorToken: String?,
+    val twoFactorTypes: List<String>,
     val message: String?,
     val user: SynapseUser?,
 )
+
+data class PendingTwoFactorChallenge(
+    val user: SynapseUser?,
+    val token: String?,
+    val methods: List<String>,
+) {
+    val tokenPreview: String? = token.toSensitiveTokenPreview()
+    val methodLabel: String = methods.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: "未知"
+}
 
 data class MobileLoginChallenge(
     val success: Boolean,
@@ -43,6 +53,31 @@ data class ClientTokenIssueResult(
 )
 
 data class JwtExchangeResult(
+    val success: Boolean,
+    val token: String,
+    val user: SynapseUser,
+)
+
+data class PasskeyAuthenticationOptions(
+    val rawJson: String,
+    val hasChallenge: Boolean,
+    val rpId: String?,
+    val allowCredentialCount: Int,
+    val userVerification: String?,
+) {
+    val summaryLines: List<String> = listOfNotNull(
+        "Challenge：${if (hasChallenge) "已返回" else "未返回"}",
+        rpId?.takeIf { it.isNotBlank() }?.let { "RP ID：$it" },
+        "Credential 数量：$allowCredentialCount",
+        userVerification?.takeIf { it.isNotBlank() }?.let { "User Verification：$it" },
+    )
+}
+
+data class PasskeyAuthenticationStartResult(
+    val options: PasskeyAuthenticationOptions,
+)
+
+data class PasskeyAuthenticationFinishResult(
     val success: Boolean,
     val token: String,
     val user: SynapseUser,
@@ -97,6 +132,6 @@ sealed interface LoginOutcome {
 
     data class TwoFactorRequired(
         val message: String?,
-        val twoFactorToken: String?,
+        val challenge: PendingTwoFactorChallenge,
     ) : LoginOutcome
 }

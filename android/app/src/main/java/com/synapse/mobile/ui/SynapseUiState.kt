@@ -1,12 +1,14 @@
 package com.synapse.mobile.ui
 
+import com.synapse.mobile.core.auth.PasskeyAuthenticationOptions
+import com.synapse.mobile.core.auth.PendingTwoFactorChallenge
 import com.synapse.mobile.core.auth.StoredSynapseCredentials
 import com.synapse.mobile.core.auth.SynapseQrPayload
 
 enum class SynapseTab(val label: String) {
-    Login("登录"),
-    Qr("扫码"),
-    Session("会话"),
+    Login("本客户端登录"),
+    Qr("网页登录"),
+    Session("本地会话"),
 }
 
 data class SynapseUiState(
@@ -17,6 +19,8 @@ data class SynapseUiState(
     val deviceId: String = "",
     val manualQrPayload: String = "",
     val parsedQrPayload: SynapseQrPayload? = null,
+    val pendingTwoFactorChallenge: PendingTwoFactorChallenge? = null,
+    val passkeyOptions: PasskeyAuthenticationOptions? = null,
     val credentials: StoredSynapseCredentials = StoredSynapseCredentials(
         jwt = null,
         clientLoginToken = null,

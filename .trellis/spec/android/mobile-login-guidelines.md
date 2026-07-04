@@ -26,6 +26,8 @@ Core Kotlin APIs:
 SynapseMobileLoginApi.standardLogin(username: String, password: String): StandardLoginResult
 SynapseMobileLoginApi.issueClientToken(jwt: String, deviceId: String, deviceName: String): ClientTokenIssueResult
 SynapseMobileLoginApi.exchangeClientToken(clientLoginToken: String, deviceId: String): JwtExchangeResult
+SynapseMobileLoginApi.startPasskeyAuthentication(username: String, clientOrigin: String): PasskeyAuthenticationStartResult
+SynapseMobileLoginApi.finishPasskeyAuthentication(assertionResponse: JSONObject): PasskeyAuthenticationFinishResult
 SynapseMobileLoginApi.markScanned(payload: SynapseQrPayload): MobileLoginStatus
 SynapseMobileLoginApi.confirmWithJwt(payload: SynapseQrPayload, jwt: String): MobileLoginStatus
 SynapseMobileLoginApi.confirmWithClientToken(payload: SynapseQrPayload, clientLoginToken: String, deviceId: String): MobileLoginStatus
@@ -48,6 +50,48 @@ POST /api/auth/mobile-login/challenge/poll
 POST /api/auth/mobile-login/client-token/issue
 POST /api/auth/mobile-login/client-token/exchange
 POST /api/auth/mobile-login/client-token/revoke
+POST /api/passkey/authenticate/start
+POST /api/passkey/authenticate/finish
+```
+
+Standard login `requires2FA` response contract:
+
+```json
+{
+  "user": { "id": "string", "username": "string", "email": "string", "role": "user" },
+  "token": "short-lived-2fa-token",
+  "requires2FA": true,
+  "twoFactorType": ["TOTP", "Passkey"]
+}
+```
+
+The Android client must treat this `token` as a short-lived 2FA token, not a normal JWT, and must not issue a client login token until a TOTP or Passkey finish flow returns a formal JWT.
+
+Passkey start request/response contract:
+
+```json
+{ "username": "alice", "clientOrigin": "https://tts.chloemlla.com" }
+```
+
+```json
+{
+  "options": {
+    "challenge": "string",
+    "rpId": "string",
+    "allowCredentials": [{ "id": "string", "transports": ["internal"] }],
+    "userVerification": "required"
+  }
+}
+```
+
+Passkey finish returns:
+
+```json
+{
+  "success": true,
+  "token": "jwt",
+  "user": { "id": "string", "username": "string", "email": "string" }
+}
 ```
 
 QR payload contract:
@@ -86,7 +130,9 @@ Credential contract:
 | QR scheme/host is not `synapse://mobile-login` | Reject before network request |
 | QR `apiBaseUrl` is not HTTPS | Reject before network request |
 | QR is expired | Reject scan/confirm action |
-| Standard login returns `requires2FA` | Do not issue client token until a JWT is available |
+| Standard login returns `requires2FA` | Preserve `user`, short-lived token, and `twoFactorType`; do not issue client token until a JWT is available |
+| Passkey start returns WebAuthn `options` | Keep the raw options for the native/browser assertion flow, but show only a summary; do not display `challenge` or credential IDs in full |
+| Passkey finish returns a JWT | Save the JWT encrypted, then issue and save the client login token |
 | Client token exchange returns 401 | Clear local credentials and require login |
 | JWT confirm returns 401 and client token exists | Clear local JWT and retry confirm with client token |
 | Revoke succeeds with `revoked=true` | Clear local credentials |
@@ -99,6 +145,8 @@ Good: scanner receives a valid QR payload, `markScanned` posts `sessionId` and `
 
 Base: user has a `clientLoginToken` but no JWT; app exchanges it at startup and stores the returned JWT/user.
 
+Two-factor: standard login returns `requires2FA` with `twoFactorType: ["TOTP", "Passkey"]`; app shows the available methods and a short token preview, then requests Passkey options only when the user chooses Passkey.
+
 Bad: app logs a full JWT or client login token, accepts HTTP `apiBaseUrl`, or confirms a QR login without showing the target site.
 
 Error display: if an API response says only `输入验证失败` in the top-level message but includes nested field errors, the app must surface those field errors to the user. The diagnostic request context may include `POST https://.../api/...`, HTTP status, and submitted field names only; it must not include submitted values.
@@ -108,6 +156,8 @@ Error display: if an API response says only `输入验证失败` in the top-leve
 - Unit test `SynapseQrPayload.parse` for valid payload, wrong scheme/host, missing fields, and non-HTTPS `apiBaseUrl`.
 - Unit test `CertificatePinPolicy.parse` for whitespace/comma separated pins and invalid entries.
 - Unit test API error formatting with nested validation details and a negative assertion that request values are not echoed.
+- Unit test standard login JSON mapping for `requires2FA`, short-lived token fallback from `token`, `twoFactorType`, and `user`.
+- Unit test Passkey start/finish JSON mapping, including `allowCredentials` count and finish responses whose `user` omits `role`.
 - Do not add `androidTestImplementation` dependencies until real instrumentation tests exist. Unused AndroidX Test/Espresso dependencies still participate in `generateDebugAndroidTestLintModel` and can conflict with dependency lock constraints.
 - CameraX `ImageProxy.image` usage must be explicitly marked with AndroidX annotation opt-in, for example `@androidx.annotation.OptIn(markerClass = [ExperimentalGetImage::class])`; Kotlin's standard `@OptIn(ExperimentalGetImage::class)` does not satisfy AndroidX lint. Do not hide this lint error with a baseline.
 - CI must run `gradle testDebugUnitTest`, `gradle lintDebug`, and `gradle assembleRelease` from `android/`.
@@ -123,6 +173,7 @@ Local Gradle commands remain prohibited by repository policy; do not run them fr
 ```kotlin
 Text(credentials.clientLoginToken.orEmpty())
 Log.d("Synapse", "jwt=$jwt")
+credentialStore.saveJwt(login.token!!)
 SynapseQrPayload.parse("synapse://mobile-login?apiBaseUrl=http://example.com")
 ```
 
@@ -130,6 +181,7 @@ SynapseQrPayload.parse("synapse://mobile-login?apiBaseUrl=http://example.com")
 
 ```kotlin
 Text(if (credentials.hasClientLoginToken) "已保存" else "未保存")
+if (login.requiresTwoFactor) return PendingTwoFactorChallenge(login.user, login.twoFactorToken, login.twoFactorTypes)
 require(apiBaseUrl.startsWith("https://"))
 credentialStore.saveClientLoginToken(clientLoginToken)
 ```

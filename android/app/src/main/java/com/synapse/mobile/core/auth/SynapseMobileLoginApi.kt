@@ -86,6 +86,20 @@ class SynapseMobileLoginApi(
                 .put("deviceId", deviceId),
         ) { it.toJwtExchangeResult() }
 
+    suspend fun startPasskeyAuthentication(username: String, clientOrigin: String): PasskeyAuthenticationStartResult =
+        post(
+            path = "/api/passkey/authenticate/start",
+            body = JSONObject()
+                .put("username", username)
+                .put("clientOrigin", clientOrigin),
+        ) { it.toPasskeyAuthenticationStartResult() }
+
+    suspend fun finishPasskeyAuthentication(assertionResponse: JSONObject): PasskeyAuthenticationFinishResult =
+        post(
+            path = "/api/passkey/authenticate/finish",
+            body = assertionResponse,
+        ) { it.toPasskeyAuthenticationFinishResult() }
+
     suspend fun revokeClientToken(jwt: String, clientLoginToken: String): Boolean =
         post(
             path = "/api/auth/mobile-login/client-token/revoke",

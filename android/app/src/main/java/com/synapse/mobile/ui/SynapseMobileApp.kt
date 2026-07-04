@@ -115,7 +115,7 @@ private fun LoginPanel(
     viewModel: SynapseLoginViewModel,
 ) {
     PanelColumn {
-        SectionTitle("首次登录")
+        SectionTitle("登录本客户端")
         OutlinedTextField(
             value = state.username,
             onValueChange = viewModel::updateUsername,
@@ -143,14 +143,38 @@ private fun LoginPanel(
             enabled = !state.loading,
             onClick = viewModel::login,
         ) {
-            Text("登录并签发客户端令牌")
+            Text("登录本客户端并签发令牌")
         }
         Text(
-            text = "如果服务端返回 requires2FA，界面会提示继续完成 TOTP 或 Passkey 验证。",
+            text = "这是登录本客户端；如需二次验证，完成 TOTP 或 Passkey 后才会保存客户端令牌。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        SectionTitle("已有 JWT")
+        state.pendingTwoFactorChallenge?.let { challenge ->
+            InfoCard(
+                title = "本客户端登录需要二次验证",
+                lines = listOf(
+                    "账号：${challenge.user?.username ?: state.username}",
+                    "验证方式：${challenge.methodLabel}",
+                    "二次验证凭据：已接收",
+                ),
+            )
+            if (challenge.methods.any { it.equals("Passkey", ignoreCase = true) }) {
+                OutlinedButton(
+                    enabled = !state.loading,
+                    onClick = viewModel::startPasskeyAuthentication,
+                ) {
+                    Text("获取本客户端 Passkey 认证选项")
+                }
+            }
+        }
+        state.passkeyOptions?.let { options ->
+            InfoCard(
+                title = "Passkey 认证选项",
+                lines = options.summaryLines,
+            )
+        }
+        SectionTitle("用网页端 JWT 登录本客户端")
         OutlinedTextField(
             value = state.manualJwt,
             onValueChange = viewModel::updateManualJwt,
@@ -158,13 +182,13 @@ private fun LoginPanel(
                 .fillMaxWidth()
                 .height(112.dp),
             minLines = 2,
-            label = { Text("完成二次验证后的 JWT") },
+            label = { Text("网页端或二次验证后的 JWT") },
         )
         OutlinedButton(
             enabled = !state.loading && state.manualJwt.isNotBlank(),
             onClick = viewModel::issueClientTokenFromJwt,
         ) {
-            Text("用 JWT 签发客户端令牌")
+            Text("用 JWT 登录本客户端")
         }
     }
 }
@@ -175,19 +199,19 @@ private fun QrPanel(
     viewModel: SynapseLoginViewModel,
 ) {
     PanelColumn {
-        SectionTitle("网页登录二维码")
+        SectionTitle("确认网页登录")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 enabled = !state.loading,
                 onClick = { viewModel.setScannerVisible(!state.showScanner) },
             ) {
-                Text(if (state.showScanner) "关闭相机" else "扫描二维码")
+                Text(if (state.showScanner) "关闭相机" else "扫描网页登录二维码")
             }
             OutlinedButton(
                 enabled = !state.loading,
                 onClick = viewModel::markScanned,
             ) {
-                Text("标记已扫码")
+                Text("标记网页登录已扫码")
             }
         }
 
@@ -205,12 +229,12 @@ private fun QrPanel(
                 .fillMaxWidth()
                 .height(128.dp),
             minLines = 3,
-            label = { Text("synapse://mobile-login payload") },
+            label = { Text("网页登录二维码 payload") },
         )
 
         state.parsedQrPayload?.let { payload ->
             InfoCard(
-                title = "二维码详情",
+                title = "网页登录二维码详情",
                 lines = listOf(
                     "目标站点：${payload.apiBaseUrl}",
                     "Session：${payload.sessionId}",
@@ -224,7 +248,7 @@ private fun QrPanel(
             enabled = !state.loading && state.manualQrPayload.isNotBlank(),
             onClick = viewModel::confirmQrLogin,
         ) {
-            Text("确认网页登录")
+            Text("确认登录网页端")
         }
     }
 }
@@ -242,7 +266,7 @@ private fun SessionPanel(
                 "Device ID：${state.deviceId}",
                 "当前账号：${state.credentials.username ?: state.credentials.email ?: "未登录"}",
                 "JWT：${if (state.credentials.hasJwt) "已保存" else "未保存"}",
-                "客户端登录令牌：${state.credentials.clientLoginTokenPreview ?: "未保存"}",
+                "客户端登录令牌：${if (state.credentials.hasClientLoginToken) "已保存" else "未保存"}",
             ),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -250,13 +274,13 @@ private fun SessionPanel(
                 enabled = !state.loading,
                 onClick = viewModel::silentLogin,
             ) {
-                Text("自动登录")
+                Text("自动登录本客户端")
             }
             OutlinedButton(
                 enabled = !state.loading,
                 onClick = viewModel::revokeClientToken,
             ) {
-                Text("撤销令牌")
+                Text("撤销本客户端令牌")
             }
         }
         OutlinedButton(

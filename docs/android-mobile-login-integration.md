@@ -11,6 +11,82 @@ API 地址：https://tts.chloemlla.com
 
 网页扫码登录由 Web 端创建短期挑战，安卓端扫描二维码并确认，Web 端轮询拿到标准 JWT 后进入登录态。
 
+## 标准登录二次验证
+
+`POST /api/auth/login` 如果账号需要二次验证，会返回短期二次验证 token，而不是正式 JWT。安卓端不能用这个 token 签发客户端登录令牌。
+
+示例响应：
+
+```json
+{
+  "success": true,
+  "requires2FA": true,
+  "token": "short-lived-2fa-token",
+  "twoFactorType": ["TOTP", "Passkey"],
+  "user": {
+    "id": "string",
+    "username": "string",
+    "email": "string",
+    "role": "user"
+  }
+}
+```
+
+安卓端应保留 `user`、短期 `token` 和 `twoFactorType`，继续走 TOTP 或 Passkey 验证。只有后续接口返回正式 JWT 后，才能调用 `/api/auth/mobile-login/client-token/issue`。
+
+### Passkey 开始认证
+
+`POST /api/passkey/authenticate/start`
+
+请求：
+
+```json
+{
+  "username": "string",
+  "clientOrigin": "https://tts.chloemlla.com"
+}
+```
+
+响应：
+
+```json
+{
+  "options": {
+    "challenge": "string",
+    "rpId": "string",
+    "allowCredentials": [
+      {
+        "id": "string",
+        "transports": ["internal"]
+      }
+    ],
+    "userVerification": "required"
+  }
+}
+```
+
+`options` 是 WebAuthn 认证选项，交给浏览器 Passkey API 或原生 Credential Manager 适配层使用。界面可显示是否已获取 challenge、`rpId`、credential 数量和 `userVerification`，不要完整展示 challenge 或 credential id。
+
+### Passkey 完成认证
+
+`POST /api/passkey/authenticate/finish`
+
+安卓端把 Passkey API 返回的 WebAuthn assertion response 发回服务端。验证成功后返回正式 JWT：
+
+```json
+{
+  "success": true,
+  "token": "jwt",
+  "user": {
+    "id": "string",
+    "username": "string",
+    "email": "string"
+  }
+}
+```
+
+安卓端收到正式 JWT 后应加密保存 JWT，并立即调用客户端登录令牌签发接口。
+
 ## 二维码 Payload
 
 Web 登录页调用创建挑战接口后，二维码内容是一个 deep link：

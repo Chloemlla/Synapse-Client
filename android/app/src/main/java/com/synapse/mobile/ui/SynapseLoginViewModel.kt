@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.synapse.mobile.core.auth.LoginOutcome
 import com.synapse.mobile.core.auth.SynapseAuthRepository
 import com.synapse.mobile.core.auth.SynapseQrPayload
-import com.synapse.mobile.core.auth.toSensitiveTokenPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,11 +25,25 @@ class SynapseLoginViewModel(
     val state: StateFlow<SynapseUiState> = mutableState.asStateFlow()
 
     fun updateUsername(value: String) {
-        mutableState.update { it.copy(username = value, error = null) }
+        mutableState.update {
+            it.copy(
+                username = value,
+                pendingTwoFactorChallenge = null,
+                passkeyOptions = null,
+                error = null,
+            )
+        }
     }
 
     fun updatePassword(value: String) {
-        mutableState.update { it.copy(password = value, error = null) }
+        mutableState.update {
+            it.copy(
+                password = value,
+                pendingTwoFactorChallenge = null,
+                passkeyOptions = null,
+                error = null,
+            )
+        }
     }
 
     fun updateManualJwt(value: String) {
@@ -78,22 +91,54 @@ class SynapseLoginViewModel(
                 )
             ) {
                 is LoginOutcome.Authenticated -> {
+                    mutableState.update {
+                        it.copy(
+                            pendingTwoFactorChallenge = null,
+                            passkeyOptions = null,
+                        )
+                    }
                     val name = result.user?.username?.takeIf { it.isNotBlank() } ?: current.username
-                    val tokenPreview = repository.credentials().clientLoginToken.toSensitiveTokenPreview()
-                    "登录成功，已签发客户端登录令牌${tokenPreview?.let { "：$it" }.orEmpty()}。当前账号：$name"
+                    "本客户端登录成功，已签发客户端登录令牌。当前账号：$name"
                 }
 
                 is LoginOutcome.TwoFactorRequired -> {
-                    result.message ?: "账号需要继续完成 TOTP 或 Passkey 二次验证。"
+                    mutableState.update {
+                        it.copy(
+                            pendingTwoFactorChallenge = result.challenge,
+                            passkeyOptions = null,
+                        )
+                    }
+                    val user = result.challenge.user?.username?.takeIf { it.isNotBlank() } ?: current.username
+                    result.message ?: "登录本客户端的账号 $user 需要二次验证：${result.challenge.methodLabel}"
                 }
             }
+        }
+    }
+
+    fun startPasskeyAuthentication() {
+        val current = state.value
+        val challenge = current.pendingTwoFactorChallenge
+        if (challenge == null || !challenge.methods.any { it.equals("Passkey", ignoreCase = true) }) {
+            mutableState.update { it.copy(error = "当前登录没有可用的 Passkey 验证方式。") }
+            return
+        }
+        val username = challenge.user?.username?.takeIf { it.isNotBlank() } ?: current.username
+        if (username.isBlank()) {
+            mutableState.update { it.copy(error = "缺少 Passkey 认证所需用户名。") }
+            return
+        }
+
+        launchAction {
+            val result = repository.startPasskeyAuthentication(username)
+            mutableState.update { it.copy(passkeyOptions = result.options) }
+            "已获取本客户端 Passkey 认证选项。"
         }
     }
 
     fun silentLogin() {
         launchAction {
             val result = repository.silentLogin()
-            "自动登录成功，当前账号：${result.user.username.ifBlank { result.user.email }}"
+            "本客户端自动登录成功，当前账号：${result.user.username.ifBlank { result.user.email }}"
         }
     }
 
@@ -105,12 +150,11 @@ class SynapseLoginViewModel(
         }
 
         launchAction {
-            val issued = repository.issueClientTokenForJwt(
+            repository.issueClientTokenForJwt(
                 jwt = current.manualJwt,
                 deviceName = current.deviceName,
             )
-            val tokenPreview = issued.clientLoginToken.toSensitiveTokenPreview()
-            "客户端登录令牌已签发${tokenPreview?.let { "：$it" }.orEmpty()}，过期时间：${issued.expiresAt}"
+            "已使用 JWT 登录本客户端并签发客户端登录令牌。"
         }
     }
 
@@ -125,7 +169,7 @@ class SynapseLoginViewModel(
             val result = repository.parseAndMarkScanned(rawPayload)
             val parsed = SynapseQrPayload.parse(rawPayload)
             mutableState.update { it.copy(parsedQrPayload = parsed) }
-            "已标记扫码状态：${result.status}"
+            "已标记网页登录扫码状态：${result.status}"
         }
     }
 
@@ -154,6 +198,8 @@ class SynapseLoginViewModel(
         mutableState.update {
             it.copy(
                 credentials = repository.credentials(),
+                pendingTwoFactorChallenge = null,
+                passkeyOptions = null,
                 status = "本地凭据已清理。",
                 error = null,
             )

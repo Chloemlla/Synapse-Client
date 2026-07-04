@@ -2,6 +2,7 @@ package com.synapse.mobile.core.auth
 
 import android.content.Context
 import android.os.Build
+import org.json.JSONObject
 
 class SynapseAuthRepository(
     context: Context,
@@ -32,7 +33,11 @@ class SynapseAuthRepository(
         if (login.requiresTwoFactor) {
             return LoginOutcome.TwoFactorRequired(
                 message = login.message,
-                twoFactorToken = login.twoFactorToken,
+                challenge = PendingTwoFactorChallenge(
+                    user = login.user,
+                    token = login.twoFactorToken,
+                    methods = login.twoFactorTypes,
+                ),
             )
         }
 
@@ -66,6 +71,37 @@ class SynapseAuthRepository(
             .also { issued ->
                 credentialStore.saveClientLoginToken(issued.clientLoginToken)
             }
+    }
+
+    suspend fun startPasskeyAuthentication(username: String): PasskeyAuthenticationStartResult {
+        val normalizedUsername = username.trim()
+        require(normalizedUsername.isNotBlank()) { "Username is required." }
+        return apiFor(defaultBaseUrl).startPasskeyAuthentication(
+            username = normalizedUsername,
+            clientOrigin = defaultBaseUrl.trim().trimEnd('/'),
+        )
+    }
+
+    suspend fun finishPasskeyAuthentication(
+        assertionResponse: JSONObject,
+        deviceName: String,
+    ): LoginOutcome.Authenticated {
+        val api = apiFor(defaultBaseUrl)
+        val result = api.finishPasskeyAuthentication(assertionResponse)
+        require(result.token.isNotBlank()) { "Passkey response did not include a JWT." }
+        credentialStore.saveJwt(result.token, result.user)
+
+        val issued = api.issueClientToken(
+            jwt = result.token,
+            deviceId = deviceId.getOrCreate(),
+            deviceName = deviceName.ifBlank { defaultDeviceName() },
+        )
+        credentialStore.saveClientLoginToken(issued.clientLoginToken)
+
+        return LoginOutcome.Authenticated(
+            user = result.user,
+            clientTokenExpiresAt = issued.expiresAt,
+        )
     }
 
     suspend fun silentLogin(): JwtExchangeResult {
