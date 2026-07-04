@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -114,8 +115,6 @@ fun SynapseMobileApp(viewModel: SynapseLoginViewModel) {
                 .background(MaterialTheme.colorScheme.background)
                 .padding(padding),
         ) {
-            SynapseAppHeader(state = state)
-
             TabRow(
                 selectedTabIndex = state.selectedTab.ordinal,
                 containerColor = MaterialTheme.colorScheme.surface,
@@ -135,8 +134,6 @@ fun SynapseMobileApp(viewModel: SynapseLoginViewModel) {
                     )
                 }
             }
-
-            StatusBanner(state = state)
 
             Box(
                 modifier = Modifier
@@ -161,32 +158,37 @@ private fun SynapseTab.icon(): ImageVector =
     }
 
 @Composable
-private fun SynapseAppHeader(state: SynapseUiState) {
+private fun SynapseAppHeader(
+    state: SynapseUiState,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+) {
     val activeAccount = state.credentials.activeAccount ?: state.credentials.accounts.firstOrNull()
     val accountName = activeAccount?.displayName ?: state.credentials.displayName ?: "未登录"
     val tokenReady = state.hasCurrentClientLoginToken
     val qrReady = state.hasUsableQrPayload && state.hasAnyWebLoginCredential
+    val outerPadding = if (compact) 12.dp else 16.dp
+    val verticalSpacing = if (compact) 8.dp else 14.dp
+    val iconSize = if (compact) 36.dp else 46.dp
 
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 2.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.padding(outerPadding),
+            verticalArrangement = Arrangement.spacedBy(verticalSpacing),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 12.dp),
             ) {
                 Box(
                     modifier = Modifier
-                        .size(46.dp)
+                        .size(iconSize)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center,
@@ -203,7 +205,11 @@ private fun SynapseAppHeader(state: SynapseUiState) {
                 ) {
                     Text(
                         text = "安全登录中枢",
-                        style = MaterialTheme.typography.titleLarge,
+                        style = if (compact) {
+                            MaterialTheme.typography.titleMedium
+                        } else {
+                            MaterialTheme.typography.titleLarge
+                        },
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
@@ -214,32 +220,46 @@ private fun SynapseAppHeader(state: SynapseUiState) {
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
+                        maxLines = if (compact) 1 else 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!compact) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatusPill(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Outlined.AccountCircle,
+                        label = "账号",
+                        value = accountName,
+                        active = activeAccount != null,
+                    )
+                    StatusPill(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Outlined.Key,
+                        label = "SML",
+                        value = if (tokenReady) "已保存" else "未保存",
+                        active = tokenReady,
+                    )
+                    StatusPill(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Outlined.QrCodeScanner,
+                        label = "网页登录",
+                        value = if (qrReady) "可确认" else "待准备",
+                        active = qrReady,
+                    )
+                }
+            } else {
                 StatusPill(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Outlined.AccountCircle,
-                    label = "账号",
-                    value = accountName,
-                    active = activeAccount != null,
-                )
-                StatusPill(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Outlined.Key,
-                    label = "SML",
-                    value = if (tokenReady) "已保存" else "未保存",
-                    active = tokenReady,
-                )
-                StatusPill(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     icon = Icons.Outlined.QrCodeScanner,
-                    label = "网页登录",
-                    value = if (qrReady) "可确认" else "待准备",
-                    active = qrReady,
+                    label = "状态",
+                    value = listOf(
+                        if (activeAccount != null) accountName else "未登录",
+                        if (tokenReady) "SML 已保存" else "SML 未保存",
+                        if (qrReady) "网页登录可确认" else "网页登录待准备",
+                    ).joinToString(" · "),
+                    active = tokenReady || qrReady,
                 )
             }
         }
@@ -300,7 +320,7 @@ private fun StatusBanner(state: SynapseUiState) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp, 0.dp, 16.dp, 10.dp),
+            .padding(bottom = 10.dp),
         shape = RoundedCornerShape(14.dp),
         color = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
         border = BorderStroke(
@@ -347,7 +367,7 @@ private fun LoginPanel(
     state: SynapseUiState,
     viewModel: SynapseLoginViewModel,
 ) {
-    PanelColumn {
+    PanelColumn(state = state) {
         SectionTitle(
             text = "登录本客户端",
             subtitle = "签发本机 SML 令牌，用于静默登录和网页登录确认。",
@@ -507,7 +527,7 @@ private fun QrPanel(
             "扫描或粘贴 synapse://mobile-login 二维码 payload。"
         }
 
-    PanelColumn {
+    PanelColumn(state = state) {
         SectionTitle(
             text = "确认网页登录",
             subtitle = "扫描网页二维码后，核对目标站点并选择本机账号确认。",
@@ -697,7 +717,7 @@ private fun SessionPanel(
     var showRevokeConfirmation by rememberSaveable { mutableStateOf(false) }
     var showClearConfirmation by rememberSaveable { mutableStateOf(false) }
 
-    PanelColumn {
+    PanelColumn(state = state) {
         SectionTitle(
             text = "本地会话",
             subtitle = "管理当前设备上的授权状态和本机令牌。",
@@ -1001,22 +1021,34 @@ private fun ConfirmActionDialog(
 }
 
 @Composable
-private fun PanelColumn(content: @Composable () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(PaddingValues(16.dp)),
-    ) {
-        Column(
+private fun PanelColumn(
+    state: SynapseUiState,
+    content: @Composable () -> Unit,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val compactHeader = maxHeight < 520.dp
+
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = 760.dp)
-                .align(Alignment.TopCenter),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(PaddingValues(16.dp)),
         ) {
-            content()
-            Spacer(Modifier.height(12.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 760.dp)
+                    .align(Alignment.TopCenter),
+                verticalArrangement = Arrangement.spacedBy(if (compactHeader) 10.dp else 14.dp),
+            ) {
+                SynapseAppHeader(
+                    state = state,
+                    compact = compactHeader,
+                )
+                StatusBanner(state = state)
+                content()
+                Spacer(Modifier.height(12.dp))
+            }
         }
     }
 }

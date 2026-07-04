@@ -45,6 +45,7 @@ StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active
 - Authentication, QR, session, scanner, and destructive-action states must use semantic icons and colors.
 - Do not render full JWT, `clientLoginToken`, `scanToken`, Turnstile token, password, or certificate pin values. UI may show a token preview and may copy the full SML token only through an explicit copy action.
 - Keep panels constrained for larger screens and scrollable for mobile screens; text must use `maxLines` and `TextOverflow.Ellipsis` where long account/device/token values appear.
+- Large summary/status regions must live inside the tab's scrollable content and switch to a compact form on low-height layouts such as landscape, so users can always scroll past them to the form/actions below.
 - Do not add visible instructional text about internal design choices, keyboard shortcuts, or implementation details.
 
 ### 4. Validation & Error Matrix
@@ -56,6 +57,7 @@ StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active
 | New destructive action | Require a confirmation dialog with warning icon and explicit confirm text. |
 | New credential/token display | Show availability or preview only; never render the full secret value. |
 | Long account, device, URL, or token-adjacent text | Cap lines and use ellipsis. |
+| Landscape or low-height screen | Keep header/status content scrollable and compact; do not pin a large banner above the scroll area. |
 | New scanner/permission UI | Keep the permission rationale visible before launching permission request. |
 | Need build/lint/test verification | Use GitHub Actions; do not run local Gradle commands. |
 
@@ -106,4 +108,13 @@ InfoCard(
     icon = Icons.Outlined.QrCodeScanner,
     lines = detailLines,
 )
+
+BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    val compactHeader = maxHeight < 520.dp
+    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+        SynapseAppHeader(state = state, compact = compactHeader)
+        StatusBanner(state = state)
+        TabContent()
+    }
+}
 ```
