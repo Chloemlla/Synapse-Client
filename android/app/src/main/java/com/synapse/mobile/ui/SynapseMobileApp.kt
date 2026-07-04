@@ -1,5 +1,6 @@
 package com.synapse.mobile.ui
 
+import android.content.ClipData
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -30,14 +31,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.synapse.mobile.core.auth.StoredSynapseAccount
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -502,7 +505,8 @@ private fun AccountSelectorRow(
     active: Boolean,
     onSelect: () -> Unit,
 ) {
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val coroutineScope = rememberCoroutineScope()
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -513,7 +517,11 @@ private fun AccountSelectorRow(
             style = MaterialTheme.typography.bodyMedium,
         )
         OutlinedButton(
-            onClick = { clipboard.setText(AnnotatedString(account.displayName)) },
+            onClick = {
+                coroutineScope.launch {
+                    clipboard.setClipEntry(account.displayName.toClipEntry("Synapse account"))
+                }
+            },
         ) {
             Text("复制")
         }
@@ -528,7 +536,8 @@ private fun AccountSelectorRow(
 
 @Composable
 private fun CopyableLine(label: String, value: String) {
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val coroutineScope = rememberCoroutineScope()
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium)
         Row(
@@ -542,13 +551,20 @@ private fun CopyableLine(label: String, value: String) {
             )
             OutlinedButton(
                 enabled = value.isNotBlank() && value != "未返回" && value != "未保存",
-                onClick = { clipboard.setText(AnnotatedString(value)) },
+                onClick = {
+                    coroutineScope.launch {
+                        clipboard.setClipEntry(value.toClipEntry(label))
+                    }
+                },
             ) {
                 Text("复制")
             }
         }
     }
 }
+
+private fun String.toClipEntry(label: String): ClipEntry =
+    ClipEntry(ClipData.newPlainText(label, this))
 
 @Composable
 private fun PanelColumn(content: @Composable () -> Unit) {
