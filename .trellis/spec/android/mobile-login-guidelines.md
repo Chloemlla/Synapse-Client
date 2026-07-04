@@ -66,6 +66,13 @@ SYNAPSE_CERTIFICATE_PINS
 SYNAPSE_REQUIRE_CERTIFICATE_PINS
 ```
 
+GitHub Release environment keys derived by `.github/workflows/synapse-android.yml`:
+
+```text
+PROJECT_LUMEN_VERSION_NAME
+PROJECT_LUMEN_SHORT_HASH
+```
+
 Credential contract:
 
 - JWT and `clientLoginToken` live only in encrypted private app storage.
@@ -105,6 +112,7 @@ Error display: if an API response says only `输入验证失败` in the top-leve
 - CameraX `ImageProxy.image` usage must be explicitly marked with AndroidX annotation opt-in, for example `@androidx.annotation.OptIn(markerClass = [ExperimentalGetImage::class])`; Kotlin's standard `@OptIn(ExperimentalGetImage::class)` does not satisfy AndroidX lint. Do not hide this lint error with a baseline.
 - CI must run `gradle testDebugUnitTest`, `gradle lintDebug`, and `gradle assembleRelease` from `android/`.
 - CI must upload verification reports and release APK artifact.
+- CI must copy release APKs into root `release-assets/` and publish a non-draft, latest GitHub Release with `softprops/action-gh-release@v2` on successful non-PR runs.
 
 Local Gradle commands remain prohibited by repository policy; do not run them from the agent session.
 

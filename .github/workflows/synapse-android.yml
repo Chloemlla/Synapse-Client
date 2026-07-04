@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   android:
@@ -46,6 +46,8 @@ jobs:
         run: |
           echo "SYNAPSE_ANDROID_VERSION_NAME=1.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
           echo "SYNAPSE_ANDROID_VERSION_CODE=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          echo "PROJECT_LUMEN_VERSION_NAME=1.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          echo "PROJECT_LUMEN_SHORT_HASH=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
 
       - name: Run unit tests
         env:
@@ -118,6 +120,25 @@ jobs:
           path: android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Prepare release assets
+        if: success() && github.event_name != 'pull_request'
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/release-assets"
+          cp app/build/outputs/apk/release/*.apk "$GITHUB_WORKSPACE/release-assets/"
+
+      - name: Automatic release
+        if: success() && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          make_latest: true
+          generate_release_notes: true
+          tag_name: "v${{ env.PROJECT_LUMEN_VERSION_NAME }}-${{ env.PROJECT_LUMEN_SHORT_HASH }}"
+          prerelease: false
+          name: "Project-Lumen ${{ env.PROJECT_LUMEN_VERSION_NAME }}-${{ env.PROJECT_LUMEN_SHORT_HASH }}"
+          files: release-assets/*
 
       - name: Upload verification reports
         if: always()
