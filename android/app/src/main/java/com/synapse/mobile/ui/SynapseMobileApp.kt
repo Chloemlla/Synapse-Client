@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -31,7 +32,6 @@ import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
-import androidx.compose.material.icons.outlined.Login
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.SwapHoriz
@@ -155,7 +155,7 @@ fun SynapseMobileApp(viewModel: SynapseLoginViewModel) {
 
 private fun SynapseTab.icon(): ImageVector =
     when (this) {
-        SynapseTab.Login -> Icons.Outlined.Login
+        SynapseTab.Login -> Icons.AutoMirrored.Outlined.Login
         SynapseTab.Qr -> Icons.Outlined.QrCodeScanner
         SynapseTab.Session -> Icons.Outlined.Devices
     }
@@ -351,7 +351,7 @@ private fun LoginPanel(
         SectionTitle(
             text = "登录本客户端",
             subtitle = "签发本机 SML 令牌，用于静默登录和网页登录确认。",
-            icon = Icons.Outlined.Login,
+            icon = Icons.AutoMirrored.Outlined.Login,
         )
         CredentialSummary(
             state = state,
@@ -397,7 +397,7 @@ private fun LoginPanel(
                 (!state.requiresHumanVerification || state.turnstileVerified),
             onClick = viewModel::login,
         ) {
-            ButtonLabel(Icons.Outlined.Login, "登录本客户端并签发令牌")
+            ButtonLabel(Icons.AutoMirrored.Outlined.Login, "登录本客户端并签发令牌")
         }
         Text(
             text = "这是登录本客户端；如需二次验证，完成 TOTP 或 Passkey 后才会保存客户端令牌。",
@@ -582,7 +582,7 @@ private fun QrPanel(
             enabled = !state.loading && state.hasUsableQrPayload && state.hasAnyWebLoginCredential,
             onClick = viewModel::confirmQrLogin,
         ) {
-            ButtonLabel(Icons.Outlined.Login, "确认登录网页端")
+            ButtonLabel(Icons.AutoMirrored.Outlined.Login, "确认登录网页端")
         }
 
         if (state.showWebLoginAccountPicker) {
@@ -710,11 +710,11 @@ private fun SessionPanel(
         )
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !state.loading && state.hasCurrentClientLoginToken,
-                onClick = viewModel::silentLogin,
-            ) {
-                ButtonLabel(Icons.Outlined.Login, "自动登录本客户端")
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !state.loading && state.hasCurrentClientLoginToken,
+            onClick = viewModel::silentLogin,
+        ) {
+                ButtonLabel(Icons.AutoMirrored.Outlined.Login, "自动登录本客户端")
             }
             OutlinedButton(
                 modifier = Modifier.fillMaxWidth(),

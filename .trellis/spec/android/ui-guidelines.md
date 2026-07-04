@@ -32,7 +32,7 @@ Reusable local patterns:
 
 ```kotlin
 SectionTitle(text = "...", subtitle = "...", icon = Icons.Outlined.Security)
-ButtonLabel(Icons.Outlined.Login, "...")
+ButtonLabel(Icons.AutoMirrored.Outlined.Login, "...")
 StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active = true)
 ```
 
@@ -61,7 +61,7 @@ StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active
 
 ### 5. Good/Base/Bad Cases
 
-Good: a login action uses a full-width Material button with `Icons.Outlined.Login`, a short Chinese label, and disabled state tied to `SynapseUiState`.
+Good: a login action uses a full-width Material button with `Icons.AutoMirrored.Outlined.Login`, a short Chinese label, and disabled state tied to `SynapseUiState`.
 
 Base: an informational QR detail card uses `surfaceContainer`, a QR icon, and truncates long values.
 
