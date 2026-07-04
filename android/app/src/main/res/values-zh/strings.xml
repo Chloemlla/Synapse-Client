@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">Synapse Mobile</string>
+    <string name="camera_permission_required">需要相机权限才能扫描登录二维码。</string>
     <string name="crash_report_title">已保存崩溃报告</string>
     <string name="crash_report_message">Synapse Mobile 已从异常退出中恢复。继续使用前，可以先查看、复制或分享这份报告。</string>
     <string name="crash_report_summary">摘要</string>
