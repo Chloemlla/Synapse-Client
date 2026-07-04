@@ -65,6 +65,39 @@ jobs:
           SYNAPSE_REQUIRE_CERTIFICATE_PINS: ${{ secrets.SYNAPSE_REQUIRE_CERTIFICATE_PINS }}
         run: gradle lintDebug --no-daemon --warning-mode all
 
+      - name: Prepare release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          missing_secrets=()
+          for secret_name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!secret_name}" ]; then
+              missing_secrets+=("$secret_name")
+            fi
+          done
+
+          if [ "${#missing_secrets[@]}" -gt 0 ]; then
+            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+              echo "Release signing secrets are unavailable: ${missing_secrets[*]}; pull request APK will be unsigned."
+              exit 0
+            fi
+            for secret_name in "${missing_secrets[@]}"; do
+              echo "::error::$secret_name repository secret is required for signed Android releases."
+            done
+            exit 1
+          fi
+
+          keystore_file="$RUNNER_TEMP/synapse-release.jks"
+          if ! printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore_file"; then
+            echo "::error::KEYSTORE_BASE64 is not valid base64."
+            exit 1
+          fi
+
+          echo "KEYSTORE_FILE=$keystore_file" >> "$GITHUB_ENV"
+
       - name: Build release APK
         env:
           SYNAPSE_ANDROID_VERSION_NAME: ${{ env.SYNAPSE_ANDROID_VERSION_NAME }}
@@ -72,6 +105,10 @@ jobs:
           SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
           SYNAPSE_CERTIFICATE_PINS: ${{ secrets.SYNAPSE_CERTIFICATE_PINS }}
           SYNAPSE_REQUIRE_CERTIFICATE_PINS: ${{ secrets.SYNAPSE_REQUIRE_CERTIFICATE_PINS }}
+          KEYSTORE_FILE: ${{ env.KEYSTORE_FILE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: gradle assembleRelease --no-daemon --warning-mode all
 
       - name: Upload release APK

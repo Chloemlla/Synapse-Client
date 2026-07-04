@@ -14,6 +14,17 @@ fun providerString(name: String, defaultValue: String): String =
         ?: providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
         ?: defaultValue
 
+val releaseKeystoreFile = providerString("KEYSTORE_FILE", "")
+val releaseKeystorePassword = providerString("KEYSTORE_PASSWORD", "")
+val releaseKeyAlias = providerString("KEY_ALIAS", "")
+val releaseKeyPassword = providerString("KEY_PASSWORD", "")
+val hasReleaseSigningConfig = listOf(
+    releaseKeystoreFile,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { it.isNotBlank() }
+
 android {
     namespace = "com.synapse.mobile"
     compileSdk = 37
@@ -53,8 +64,22 @@ android {
         buildConfig = true
     }
 
+    val releaseSigningConfig = if (hasReleaseSigningConfig) {
+        signingConfigs.create("release") {
+            storeFile = file(releaseKeystoreFile)
+            storePassword = releaseKeystorePassword
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseKeyPassword
+        }
+    } else {
+        null
+    }
+
     buildTypes {
         release {
+            releaseSigningConfig?.let {
+                signingConfig = it
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
