@@ -68,7 +68,7 @@ fun PermissionAwareQrScanner(
 }
 
 @Composable
-@OptIn(ExperimentalGetImage::class)
+@androidx.annotation.OptIn(markerClass = [ExperimentalGetImage::class])
 private fun QrScannerView(
     modifier: Modifier = Modifier,
     onQrCode: (String) -> Unit,
