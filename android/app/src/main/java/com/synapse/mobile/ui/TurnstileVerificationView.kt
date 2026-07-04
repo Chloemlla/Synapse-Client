@@ -122,7 +122,7 @@ private fun TurnstileVerificationView(
     onExpired: () -> Unit,
     onError: () -> Unit,
 ) {
-    val bridge = remember { TurnstileBridge() }
+    val bridge: TurnstileBridge = remember { TurnstileBridge() }
     bridge.onVerifiedCallback = onVerified
     bridge.onExpiredCallback = onExpired
     bridge.onErrorCallback = onError
@@ -142,7 +142,7 @@ private fun TurnstileVerificationView(
                 settings.javaScriptCanOpenWindowsAutomatically = false
                 webViewClient = WebViewClient()
                 webChromeClient = WebChromeClient()
-                addJavascriptInterface(bridge, TURNSTILE_BRIDGE_NAME)
+                bridge.attachTo(this)
             }
         },
         update = { webView ->
@@ -172,6 +172,10 @@ private class TurnstileBridge {
     var onVerifiedCallback: (String) -> Unit = {}
     var onExpiredCallback: () -> Unit = {}
     var onErrorCallback: () -> Unit = {}
+
+    fun attachTo(webView: WebView) {
+        webView.addJavascriptInterface(this, TURNSTILE_BRIDGE_NAME)
+    }
 
     @JavascriptInterface
     fun onVerify(token: String) {
