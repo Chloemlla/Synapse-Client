@@ -7,11 +7,10 @@ import org.json.JSONObject
 class SynapseAuthRepository(
     context: Context,
     private val defaultBaseUrl: String,
-    private val certificatePins: String,
-    private val requireCertificatePins: Boolean,
 ) {
     private val credentialStore = SynapseCredentialStore(context)
     private val deviceId = SynapseDeviceId(context)
+    private val trustedApiOrigin = SynapseApiOriginPolicy.normalizeHttpsOrigin(defaultBaseUrl)
 
     fun credentials(): StoredSynapseCredentials = credentialStore.load()
 
@@ -31,10 +30,10 @@ class SynapseAuthRepository(
 
     fun deviceId(): String = deviceId.getOrCreate()
 
-    fun apiOrigin(): String = defaultBaseUrl.trim().trimEnd('/')
+    fun apiOrigin(): String = trustedApiOrigin
 
     suspend fun getTurnstilePublicConfig(): TurnstilePublicConfig =
-        apiFor(defaultBaseUrl).getTurnstilePublicConfig()
+        apiFor(trustedApiOrigin).getTurnstilePublicConfig()
 
     suspend fun standardLoginAndIssueClientToken(
         username: String,
@@ -42,7 +41,7 @@ class SynapseAuthRepository(
         deviceName: String,
         cfToken: String? = null,
     ): LoginOutcome {
-        val api = apiFor(defaultBaseUrl)
+        val api = apiFor(trustedApiOrigin)
         val login = api.standardLogin(username.trim(), password, cfToken)
         if (login.requiresTwoFactor) {
             return LoginOutcome.TwoFactorRequired(
@@ -75,7 +74,7 @@ class SynapseAuthRepository(
     suspend fun issueClientTokenForJwt(jwt: String, deviceName: String): ClientTokenIssueResult {
         val normalizedJwt = jwt.trim()
         require(normalizedJwt.isNotBlank()) { "JWT is required." }
-        val api = apiFor(defaultBaseUrl)
+        val api = apiFor(trustedApiOrigin)
         val user = api.currentUser(normalizedJwt)
         credentialStore.saveJwt(normalizedJwt, user)
         return api
@@ -92,9 +91,9 @@ class SynapseAuthRepository(
     suspend fun startPasskeyAuthentication(username: String): PasskeyAuthenticationStartResult {
         val normalizedUsername = username.trim()
         require(normalizedUsername.isNotBlank()) { "Username is required." }
-        return apiFor(defaultBaseUrl).startPasskeyAuthentication(
+        return apiFor(trustedApiOrigin).startPasskeyAuthentication(
             username = normalizedUsername,
-            clientOrigin = defaultBaseUrl.trim().trimEnd('/'),
+            clientOrigin = trustedApiOrigin,
         )
     }
 
@@ -105,11 +104,11 @@ class SynapseAuthRepository(
     ): LoginOutcome.Authenticated {
         val normalizedUsername = username.trim()
         require(normalizedUsername.isNotBlank()) { "Username is required." }
-        val api = apiFor(defaultBaseUrl)
+        val api = apiFor(trustedApiOrigin)
         val result = api.finishPasskeyAuthentication(
             username = normalizedUsername,
             response = assertionResponse,
-            clientOrigin = defaultBaseUrl.trim().trimEnd('/'),
+            clientOrigin = trustedApiOrigin,
         )
         require(result.token.isNotBlank()) { "Passkey response did not include a JWT." }
         credentialStore.saveJwt(result.token, result.user)
@@ -142,7 +141,7 @@ class SynapseAuthRepository(
             "TOTP code or backup code is required."
         }
 
-        val api = apiFor(defaultBaseUrl)
+        val api = apiFor(trustedApiOrigin)
         val result = api.verifyTotp(
             userId = user.id,
             pendingToken = pendingToken,
@@ -176,7 +175,7 @@ class SynapseAuthRepository(
             ?: throw IllegalStateException("No client login token is stored on this device.")
 
         return try {
-            apiFor(defaultBaseUrl)
+            apiFor(trustedApiOrigin)
                 .exchangeClientToken(clientToken, deviceId.getOrCreate())
                 .also { result ->
                     credentialStore.saveJwt(result.token, result.user)
@@ -188,7 +187,7 @@ class SynapseAuthRepository(
     }
 
     suspend fun parseAndMarkScanned(rawPayload: String): MobileLoginStatus {
-        val payload = SynapseQrPayload.parse(rawPayload)
+        val payload = parseTrustedQrPayload(rawPayload)
         require(!payload.isExpired) { "QR challenge has expired." }
         return apiFor(payload.apiBaseUrl).markScanned(payload)
     }
@@ -197,7 +196,7 @@ class SynapseAuthRepository(
         require(!credentialStore.revokeExpiredClientTokens()) {
             "SML 登录令牌已过期，请重新完成授权登录。"
         }
-        val payload = SynapseQrPayload.parse(rawPayload)
+        val payload = parseTrustedQrPayload(rawPayload)
         require(!payload.isExpired) { "QR challenge has expired." }
         val stored = credentialStore.load()
         val api = apiFor(payload.apiBaseUrl)
@@ -230,7 +229,7 @@ class SynapseAuthRepository(
         val clientToken = stored.clientLoginToken
             ?: throw IllegalStateException("No client login token is stored on this device.")
 
-        return apiFor(defaultBaseUrl).revokeClientToken(jwt, clientToken).also { revoked ->
+        return apiFor(trustedApiOrigin).revokeClientToken(jwt, clientToken).also { revoked ->
             if (revoked) credentialStore.clearCurrentAccount()
         }
     }
@@ -241,11 +240,15 @@ class SynapseAuthRepository(
 
     private fun apiFor(baseUrl: String): SynapseMobileLoginApi =
         SynapseMobileLoginApi(
-            baseUrl = baseUrl.trim().trimEnd('/'),
+            baseUrl = SynapseApiOriginPolicy.normalizeHttpsOrigin(baseUrl),
             httpClient = SynapseSecureOkHttpFactory.create(
-                baseUrl = baseUrl.trim().trimEnd('/'),
-                certificatePins = certificatePins,
-                requireCertificatePins = requireCertificatePins,
+                baseUrl = SynapseApiOriginPolicy.normalizeHttpsOrigin(baseUrl),
             ),
         )
+
+    private fun parseTrustedQrPayload(rawPayload: String): SynapseQrPayload {
+        val payload = SynapseQrPayload.parse(rawPayload)
+        SynapseApiOriginPolicy.requireTrustedOrigin(payload.apiBaseUrl, trustedApiOrigin)
+        return payload
+    }
 }

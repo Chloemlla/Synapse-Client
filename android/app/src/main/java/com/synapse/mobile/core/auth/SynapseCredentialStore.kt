@@ -4,8 +4,6 @@ import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.tencent.mmkv.MMKV
-import org.json.JSONArray
-import org.json.JSONObject
 import java.time.Instant
 import java.util.UUID
 
@@ -193,42 +191,10 @@ class SynapseCredentialStore(context: Context) {
     }
 
     private fun parseAccounts(rawJson: String): List<StoredSynapseAccount> =
-        runCatching {
-            val array = JSONArray(rawJson)
-            buildList {
-                for (index in 0 until array.length()) {
-                    val json = array.optJSONObject(index) ?: continue
-                    val accountId = json.stringValue(KEY_ACCOUNT_ID) ?: continue
-                    add(
-                        StoredSynapseAccount(
-                            accountId = accountId,
-                            jwt = json.stringValue(KEY_JWT),
-                            clientLoginToken = json.stringValue(KEY_CLIENT_LOGIN_TOKEN),
-                            clientLoginTokenExpiresAt = json.stringValue(KEY_CLIENT_LOGIN_TOKEN_EXPIRES_AT),
-                            userId = json.stringValue(KEY_USER_ID),
-                            username = json.stringValue(KEY_USERNAME),
-                            email = json.stringValue(KEY_EMAIL),
-                        ),
-                    )
-                }
-            }
-        }.getOrDefault(emptyList())
+        SynapseCredentialCodec.decodeAccounts(rawJson)
 
     private fun saveAccounts(accounts: List<StoredSynapseAccount>, activeAccountId: String?) {
-        val encoded = JSONArray().apply {
-            accounts.forEach { account ->
-                put(
-                    JSONObject()
-                        .put(KEY_ACCOUNT_ID, account.accountId)
-                        .put(KEY_JWT, account.jwt)
-                        .put(KEY_CLIENT_LOGIN_TOKEN, account.clientLoginToken)
-                        .put(KEY_CLIENT_LOGIN_TOKEN_EXPIRES_AT, account.clientLoginTokenExpiresAt)
-                        .put(KEY_USER_ID, account.userId)
-                        .put(KEY_USERNAME, account.username)
-                        .put(KEY_EMAIL, account.email),
-                )
-            }
-        }.toString()
+        val encoded = SynapseCredentialCodec.encodeAccounts(accounts)
         encryptedStore.encode(KEY_ACCOUNTS_JSON, encoded)
         if (activeAccountId.isNullOrBlank()) {
             encryptedStore.removeValuesForKeys(arrayOf(KEY_ACTIVE_ACCOUNT_ID))
@@ -308,22 +274,15 @@ class SynapseCredentialStore(context: Context) {
         ?: MANUAL_ACCOUNT_ID
 
     private fun StoredSynapseAccount.isClientLoginTokenExpiredAt(now: Instant): Boolean =
-        clientLoginTokenExpiresAt?.let { raw ->
-            runCatching { now.isAfter(Instant.parse(raw)) }.getOrDefault(false)
-        } ?: false
-
-    private fun JSONObject.stringValue(name: String): String? =
-        if (!has(name) || isNull(name)) null else optString(name).takeIf { it.isNotBlank() }
+        SynapseTokenExpiry.isExpiredAt(clientLoginTokenExpiresAt, now)
 
     private companion object {
         private const val SECURE_METADATA_NAME = "synapse_secure_metadata"
         private const val STORE_NAME = "synapse_encrypted_credentials"
         private const val KEY_ACCOUNTS_JSON = "accounts_json"
         private const val KEY_ACTIVE_ACCOUNT_ID = "active_account_id"
-        private const val KEY_ACCOUNT_ID = "account_id"
         private const val KEY_JWT = "jwt"
         private const val KEY_CLIENT_LOGIN_TOKEN = "client_login_token"
-        private const val KEY_CLIENT_LOGIN_TOKEN_EXPIRES_AT = "client_login_token_expires_at"
         private const val KEY_USER_ID = "user_id"
         private const val KEY_USERNAME = "username"
         private const val KEY_EMAIL = "email"

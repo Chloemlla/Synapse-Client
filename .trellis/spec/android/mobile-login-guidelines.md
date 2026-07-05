@@ -148,8 +148,6 @@ Environment keys consumed by Android CI/Gradle:
 SYNAPSE_ANDROID_VERSION_NAME
 SYNAPSE_ANDROID_VERSION_CODE
 SYNAPSE_API_BASE_URL
-SYNAPSE_CERTIFICATE_PINS
-SYNAPSE_REQUIRE_CERTIFICATE_PINS
 ```
 
 GitHub Release environment keys derived by `.github/workflows/synapse-android.yml`:
@@ -170,12 +168,19 @@ Credential contract:
 - Store the `expiresAt` returned by `/client-token/issue` with the corresponding `sml_` token.
 - UI may show and copy the active account `sml_` client login token and its expiration time when explicitly presenting local authorization details; do not log it or include it in API error diagnostics.
 
+Networking contract:
+
+- The Android client is HTTPS-only and must reject non-HTTPS `SYNAPSE_API_BASE_URL` and QR `apiBaseUrl` values before network requests.
+- Do not add client-side certificate pinning, `CertificatePinner`, `CertificatePinPolicy`, `SYNAPSE_CERTIFICATE_PINS`, or `SYNAPSE_REQUIRE_CERTIFICATE_PINS` without a new explicit product/security decision and spec update.
+- GitHub Actions may supply `SYNAPSE_API_BASE_URL`; it must not require certificate pin secrets for verification or signed releases.
+
 ### 4. Validation & Error Matrix
 
 | Condition | Required handling |
 |-----------|-------------------|
 | QR scheme/host is not `synapse://mobile-login` | Reject before network request |
 | QR `apiBaseUrl` is not HTTPS | Reject before network request |
+| Default `SYNAPSE_API_BASE_URL` is not HTTPS | Fail repository/client creation before network request |
 | QR is expired | Reject scan/confirm action |
 | App receives a `synapse://mobile-login` intent | Parse the payload, select the Web login tab, and mark scanned when valid |
 | Turnstile public config returns `enabled=true` with `siteKey` | Load the Turnstile widget before standard login and disable/guard login until a widget token is received |
@@ -190,7 +195,6 @@ Credential contract:
 | JWT confirm returns 401 and client token exists | Clear local JWT and retry confirm with client token |
 | Revoke succeeds with `revoked=true` | Clear local credentials |
 | Multiple accounts are stored | Display all accounts, allow switching the active account, and when confirming web login show an account picker dialog before `/challenge/confirm`; use only the selected/active account for QR confirmation |
-| Missing certificate pins while pins are required | Fail OkHttp client creation |
 | API returns validation details in `details`, `errors`, or `issues` | Show the backend message plus field-level reasons, HTTP status, method, URL, and request field names; never echo request values such as passwords, JWTs, `clientLoginToken`, or `scanToken` |
 
 ### 5. Good/Base/Bad Cases
@@ -205,14 +209,15 @@ Multi-account: logging in as a second user appends or updates that account inste
 
 Two-factor: standard login returns `requires2FA` with `twoFactorType: ["TOTP", "Passkey"]`; app shows the available methods and a short token preview, then requests Passkey options only when the user chooses Passkey.
 
-Bad: app logs a full JWT or client login token, stores a Turnstile widget token, accepts HTTP `apiBaseUrl`, overwrites an existing account when logging in as another user, or confirms a QR login without showing the target site.
+Bad: app logs a full JWT or client login token, stores a Turnstile widget token, accepts HTTP `apiBaseUrl`, reintroduces client certificate pin secrets, overwrites an existing account when logging in as another user, or confirms a QR login without showing the target site.
 
 Error display: if an API response says only `输入验证失败` in the top-level message but includes nested field errors, the app must surface those field errors to the user. The diagnostic request context may include `POST https://.../api/...`, HTTP status, and submitted field names only; it must not include submitted values.
 
 ### 6. Tests Required
 
 - Unit test `SynapseQrPayload.parse` for valid payload, wrong scheme/host, missing fields, and non-HTTPS `apiBaseUrl`.
-- Unit test `CertificatePinPolicy.parse` for whitespace/comma separated pins and invalid entries.
+- Unit test `SynapseSecureOkHttpFactory.create` for rejecting non-HTTPS API origins while constructing a normal HTTPS OkHttp client.
+- Static policy check must fail if Android source or workflow files reintroduce `CertificatePinner`, `CertificatePinPolicy`, `SYNAPSE_CERTIFICATE_PINS`, or `SYNAPSE_REQUIRE_CERTIFICATE_PINS`.
 - Unit test API error formatting with nested validation details and a negative assertion that request values are not echoed.
 - Unit test Turnstile public config JSON mapping for `enabled`, `siteKey`, and disabled/no-site-key responses.
 - Unit test standard login JSON mapping for `requires2FA`, short-lived token fallback from `token`, `twoFactorType`, and `user`.
@@ -239,6 +244,7 @@ api.standardLogin(identifier, password)
 repository.confirmQrLogin(rawPayload)
 credentialStore.saveJwt(login.token!!)
 SynapseQrPayload.parse("synapse://mobile-login?apiBaseUrl=http://example.com")
+SynapseSecureOkHttpFactory.create(baseUrl, certificatePins = BuildConfig.SYNAPSE_CERTIFICATE_PINS)
 ```
 
 #### Correct
@@ -254,5 +260,6 @@ JSONObject()
 if (login.requiresTwoFactor) return PendingTwoFactorChallenge(login.user, login.twoFactorToken, login.twoFactorTypes)
 if (credentials.accounts.size > 1) showWebLoginAccountPicker()
 require(apiBaseUrl.startsWith("https://"))
+SynapseSecureOkHttpFactory.create(baseUrl = SynapseApiOriginPolicy.normalizeHttpsOrigin(baseUrl))
 credentialStore.saveClientLoginToken(clientLoginToken, expiresAt)
 ```

@@ -74,8 +74,6 @@ class MainActivity : ComponentActivity() {
             val repository = SynapseAuthRepository(
                 context = applicationContext,
                 defaultBaseUrl = BuildConfig.SYNAPSE_API_BASE_URL,
-                certificatePins = BuildConfig.SYNAPSE_CERTIFICATE_PINS,
-                requireCertificatePins = BuildConfig.SYNAPSE_REQUIRE_CERTIFICATE_PINS,
             )
             ViewModelProvider(
                 this,

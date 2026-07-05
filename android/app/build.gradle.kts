@@ -47,16 +47,6 @@ android {
             "SYNAPSE_API_BASE_URL",
             "\"${buildConfigString(providerString("SYNAPSE_API_BASE_URL", "https://tts.chloemlla.com"))}\"",
         )
-        buildConfigField(
-            "String",
-            "SYNAPSE_CERTIFICATE_PINS",
-            "\"${buildConfigString(providerString("SYNAPSE_CERTIFICATE_PINS", ""))}\"",
-        )
-        buildConfigField(
-            "boolean",
-            "SYNAPSE_REQUIRE_CERTIFICATE_PINS",
-            providerString("SYNAPSE_REQUIRE_CERTIFICATE_PINS", "false").toBooleanStrictOrNull()?.toString() ?: "false",
-        )
     }
 
     buildFeatures {

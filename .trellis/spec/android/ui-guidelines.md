@@ -43,7 +43,7 @@ StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active
 - Keep cards at 14-18 dp radius for screen-level panels and 10-12 dp radius for rows/pills.
 - Buttons that perform clear actions should include an icon and short label via the local button-label pattern.
 - Authentication, QR, session, scanner, and destructive-action states must use semantic icons and colors.
-- Do not render full JWT, `clientLoginToken`, `scanToken`, Turnstile token, password, or certificate pin values. UI may show a token preview and may copy the full SML token only through an explicit copy action.
+- Do not render full JWT, `clientLoginToken`, `scanToken`, Turnstile token, or password values. UI may show a token preview and may copy the full SML token only through an explicit copy action.
 - Keep panels constrained for larger screens and scrollable for mobile screens; text must use `maxLines` and `TextOverflow.Ellipsis` where long account/device/token values appear.
 - Large summary/status regions must live inside the tab's scrollable content and switch to a compact form on low-height layouts such as landscape, so users can always scroll past them to the form/actions below.
 - Do not add visible instructional text about internal design choices, keyboard shortcuts, or implementation details.
@@ -72,7 +72,7 @@ Bad: a naked text-only button in a dense form, a raw `clientLoginToken` rendered
 ### 6. Tests Required
 
 - GitHub Actions must run Android unit tests, lint, and release assemble for Android UI changes.
-- Static review must confirm no raw JWT, `clientLoginToken`, `scanToken`, Turnstile token, password, or certificate pin value is rendered or logged.
+- Static review must confirm no raw JWT, `clientLoginToken`, `scanToken`, Turnstile token, or password value is rendered or logged.
 - Static review must confirm new destructive actions have confirmation.
 - For ViewModel-driven behavior changes, add/update unit tests for pure state or parser behavior where feasible.
 

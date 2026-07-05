@@ -110,9 +110,7 @@ data class StoredSynapseAccount(
     val hasClientLoginToken: Boolean = !clientLoginToken.isNullOrBlank()
     val clientLoginTokenPreview: String? = clientLoginToken.toSensitiveTokenPreview()
     val isClientLoginTokenExpired: Boolean =
-        clientLoginTokenExpiresAt?.let { raw ->
-            runCatching { Instant.now().isAfter(Instant.parse(raw)) }.getOrDefault(false)
-        } ?: false
+        SynapseTokenExpiry.isExpiredAt(clientLoginTokenExpiresAt)
 }
 
 data class StoredSynapseCredentials(

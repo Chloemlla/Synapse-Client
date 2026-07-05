@@ -16,12 +16,13 @@ object SynapseQrPayloadParser {
         val query = parseQuery(uri.rawQuery.orEmpty())
         val sessionId = query["sessionId"].orEmpty()
         val scanToken = query["scanToken"].orEmpty()
-        val apiBaseUrl = query["apiBaseUrl"].orEmpty().trimEnd('/')
+        val rawApiBaseUrl = query["apiBaseUrl"].orEmpty()
         val expiresAt = query["expiresAt"].orEmpty()
 
         require(sessionId.isNotBlank()) { "QR payload is missing sessionId." }
         require(scanToken.isNotBlank()) { "QR payload is missing scanToken." }
-        require(apiBaseUrl.startsWith("https://")) { "QR payload apiBaseUrl must use HTTPS." }
+        require(rawApiBaseUrl.isNotBlank()) { "QR payload is missing apiBaseUrl." }
+        val apiBaseUrl = SynapseApiOriginPolicy.normalizeHttpsOrigin(rawApiBaseUrl)
         require(expiresAt.isNotBlank()) { "QR payload is missing expiresAt." }
 
         return SynapseQrPayload(

@@ -847,7 +847,7 @@ private fun CredentialSummary(
             CopyableLine(
                 label = "SML 登录令牌",
                 value = active.clientLoginTokenPreview ?: "未保存",
-                copyValue = active.clientLoginToken.orEmpty(),
+                copyValue = "",
             )
             CopyableLine("SML 过期时间", active.clientLoginTokenExpiresAt ?: "未保存")
             Text(

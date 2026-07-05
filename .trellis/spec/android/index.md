@@ -9,7 +9,7 @@
 - [ ] Read [`mobile-login-guidelines.md`](./mobile-login-guidelines.md) before changing authentication, QR login, credential storage, or Android CI.
 - [ ] Read [`release-obfuscation-guidelines.md`](./release-obfuscation-guidelines.md) before changing release build types, ProGuard/R8 rules, manifest runtime components, WebView bridges, or reflection/native boundaries.
 - [ ] Do not run local Gradle build/test/install commands. Actual Android verification runs in GitHub Actions.
-- [ ] No JWT, `clientLoginToken`, `scanToken`, password, or certificate pin secret is logged, displayed in full, or written to plaintext storage.
+- [ ] No JWT, `clientLoginToken`, `scanToken`, password, or Turnstile token is logged, displayed in full, or written to plaintext storage.
 
 ## Quality Check
 

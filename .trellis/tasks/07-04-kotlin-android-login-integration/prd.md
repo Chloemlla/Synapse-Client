@@ -22,7 +22,7 @@ Create a complete Android Kotlin project under the current `Synapse-Client` repo
   * OkHttp + coroutines + `org.json`.
   * AndroidX Security Crypto + encrypted MMKV-style storage for credentials.
   * Stable local device ID.
-  * HTTPS-only network client and optional certificate pinning.
+  * HTTPS-only network client. Client-side certificate pinning is intentionally removed from this task scope.
   * GitHub Actions workflow that runs Android unit tests, lint, and release assemble in CI.
 * Do not run local build, test, install, or dependency installation commands. Actual validation must happen in GitHub Actions.
 

@@ -13,7 +13,7 @@ The app implements:
 * QR scan and manual QR payload entry;
 * web login scan marking and confirmation;
 * encrypted local credential storage;
-* HTTPS-only OkHttp with optional certificate pinning.
+* HTTPS-only OkHttp client.
 
 ## Verification
 
