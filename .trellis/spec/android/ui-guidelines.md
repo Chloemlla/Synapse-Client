@@ -47,6 +47,12 @@ StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active
 - Keep panels constrained for larger screens and scrollable for mobile screens; text must use `maxLines` and `TextOverflow.Ellipsis` where long account/device/token values appear.
 - Large summary/status regions must live inside the tab's scrollable content and switch to a compact form on low-height layouts such as landscape, so users can always scroll past them to the form/actions below.
 - Do not add visible instructional text about internal design choices, keyboard shortcuts, or implementation details.
+- Status and error banners must be dismissible when not loading; call a ViewModel clear-feedback action rather than leaving stale banners permanently visible.
+- Password fields must support show/hide via a trailing visibility icon; never log or mirror the password value elsewhere.
+- Destructive or high-impact actions (revoke token, clear credentials, confirm web QR login) require an explicit confirmation dialog that names the account and target site when applicable.
+- Token and challenge expiry timestamps shown in UI should use a local friendly format plus remaining-time bucket (minutes/hours/days), not raw ISO-8601 only.
+- Empty states for first-run login, missing web-login credentials, and empty session should explain the next action without exposing secrets.
+- After successful client authorization (password login, TOTP, Passkey, or JWT issue), clear sensitive form fields (password / JWT paste) and switch to the Session tab so the user lands on usable next steps.
 
 ### 4. Validation & Error Matrix
 
@@ -59,6 +65,10 @@ StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active
 | Long account, device, URL, or token-adjacent text | Cap lines and use ellipsis. |
 | Landscape or low-height screen | Keep header/status content scrollable and compact; do not pin a large banner above the scroll area. |
 | New scanner/permission UI | Keep the permission rationale visible before launching permission request. |
+| Dismissible status banner | Provide a close action when status/error is non-loading; clearing must not wipe form input. |
+| Password field | Trailing visibility toggle; Done IME may submit only when login preconditions pass. |
+| Confirm web QR login | Show account + target site confirmation before calling confirm API. |
+| Expiry display | Format local datetime with remaining-time label; never show full secrets. |
 | Need build/lint/test verification | Use GitHub Actions; do not run local Gradle commands. |
 
 ### 5. Good/Base/Bad Cases
@@ -118,3 +128,4 @@ BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
     }
 }
 ```
+

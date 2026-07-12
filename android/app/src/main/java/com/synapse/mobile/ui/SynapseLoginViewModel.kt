@@ -42,6 +42,24 @@ class SynapseLoginViewModel(
         mutableState.update { it.copy(selectedTab = tab, error = null) }
     }
 
+    fun clearFeedback() {
+        mutableState.update { it.copy(status = "", error = null) }
+    }
+
+    fun clearQrPayload() {
+        mutableState.update {
+            it.copy(
+                manualQrPayload = "",
+                parsedQrPayload = null,
+                qrPayloadError = null,
+                showScanner = false,
+                showWebLoginAccountPicker = false,
+                error = null,
+                status = "已清除网页登录二维码。",
+            )
+        }
+    }
+
     fun selectAccount(accountId: String) {
         runCatching { repository.selectAccount(accountId) }
             .onSuccess { credentials ->
@@ -219,8 +237,20 @@ class SynapseLoginViewModel(
 
     fun acceptScannedPayload(rawPayload: String) {
         updateManualQrPayload(rawPayload)
-        mutableState.update { it.copy(selectedTab = SynapseTab.Qr, showScanner = false) }
-        markScanned()
+        mutableState.update {
+            it.copy(
+                selectedTab = SynapseTab.Qr,
+                showScanner = false,
+                status = if (it.hasUsableQrPayload) {
+                    "已识别网页登录二维码，请核对目标站点后确认。"
+                } else {
+                    it.status
+                },
+            )
+        }
+        if (state.value.hasUsableQrPayload) {
+            markScanned()
+        }
     }
 
     fun login() {
@@ -254,9 +284,13 @@ class SynapseLoginViewModel(
                 is LoginOutcome.Authenticated -> {
                     mutableState.update {
                         it.resetTurnstileChallenge().copy(
+                            password = "",
                             pendingTwoFactorChallenge = null,
                             passkeyOptions = null,
                             passkeyAssertionJson = "",
+                            totpCode = "",
+                            backupCode = "",
+                            selectedTab = SynapseTab.Session,
                         )
                     }
                     val name = result.user?.username?.takeIf { it.isNotBlank() } ?: current.username
@@ -323,9 +357,13 @@ class SynapseLoginViewModel(
             )
             mutableState.update {
                 it.copy(
+                    password = "",
                     pendingTwoFactorChallenge = null,
                     passkeyOptions = null,
                     passkeyAssertionJson = "",
+                    totpCode = "",
+                    backupCode = "",
+                    selectedTab = SynapseTab.Session,
                 )
             }
             val name = result.user?.username?.takeIf { it.isNotBlank() } ?: current.username
@@ -354,11 +392,13 @@ class SynapseLoginViewModel(
             )
             mutableState.update {
                 it.copy(
+                    password = "",
                     pendingTwoFactorChallenge = null,
                     passkeyOptions = null,
                     passkeyAssertionJson = "",
                     totpCode = "",
                     backupCode = "",
+                    selectedTab = SynapseTab.Session,
                 )
             }
             val name = result.user?.username?.takeIf { it.isNotBlank() } ?: current.username
@@ -385,6 +425,12 @@ class SynapseLoginViewModel(
                 jwt = current.manualJwt,
                 deviceName = current.deviceName,
             )
+            mutableState.update {
+                it.copy(
+                    manualJwt = "",
+                    selectedTab = SynapseTab.Session,
+                )
+            }
             "已使用 JWT 登录本客户端并签发客户端登录令牌。"
         }
     }
@@ -469,7 +515,12 @@ class SynapseLoginViewModel(
 
         launchAction {
             val result = repository.confirmQrLogin(rawPayload)
-            "网页登录确认结果：${result.status}"
+            val site = state.value.parsedQrPayload?.apiBaseUrl
+            if (site.isNullOrBlank()) {
+                "网页登录已确认：${result.status}"
+            } else {
+                "已确认登录网页端：$site（${result.status}）"
+            }
         }
     }
 
@@ -572,3 +623,4 @@ class SynapseLoginViewModel(
         }
     }
 }
+

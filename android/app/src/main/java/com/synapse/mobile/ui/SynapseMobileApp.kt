@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -27,7 +28,9 @@ import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -37,6 +40,8 @@ import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.VerifiedUser
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -46,6 +51,7 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -68,13 +74,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.synapse.mobile.core.auth.StoredSynapseAccount
+import com.synapse.mobile.core.auth.SynapseTokenExpiry
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -313,7 +323,10 @@ private fun StatusPill(
 }
 
 @Composable
-private fun StatusBanner(state: SynapseUiState) {
+private fun StatusBanner(
+    state: SynapseUiState,
+    onDismiss: (() -> Unit)? = null,
+) {
     if (!state.loading && state.status.isBlank() && state.error == null) return
 
     val isError = state.error != null
@@ -331,9 +344,9 @@ private fun StatusBanner(state: SynapseUiState) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 10.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             when {
                 state.loading -> CircularProgressIndicator(modifier = Modifier.size(20.dp))
@@ -358,6 +371,22 @@ private fun StatusBanner(state: SynapseUiState) {
                     MaterialTheme.colorScheme.onSecondaryContainer
                 },
             )
+            if (!state.loading && onDismiss != null && (state.error != null || state.status.isNotBlank())) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = "关闭提示",
+                        tint = if (isError) {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        },
+                    )
+                }
+            }
         }
     }
 }
@@ -367,7 +396,16 @@ private fun LoginPanel(
     state: SynapseUiState,
     viewModel: SynapseLoginViewModel,
 ) {
-    PanelColumn(state = state) {
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val canSubmitLogin = !state.loading &&
+        !state.turnstileConfigLoading &&
+        state.turnstileConfigError == null &&
+        state.username.isNotBlank() &&
+        state.password.isNotBlank() &&
+        (!state.requiresHumanVerification || state.turnstileVerified)
+
+    PanelColumn(state = state, onDismissFeedback = viewModel::clearFeedback) {
         SectionTitle(
             text = "登录本客户端",
             subtitle = "签发本机 SML 令牌，用于静默登录和网页登录确认。",
@@ -378,11 +416,26 @@ private fun LoginPanel(
             viewModel = viewModel,
             title = "本客户端授权信息",
         )
+        if (!state.hasStoredAccount) {
+            InfoCard(
+                title = "首次使用",
+                icon = Icons.Outlined.Info,
+                lines = listOf(
+                    "先登录本客户端签发 SML 令牌，之后可用「网页登录」扫码确认电脑端。",
+                    "已在网页完成二次验证时，也可在下方粘贴 JWT 直接授权本机。",
+                ),
+            )
+        }
         OutlinedTextField(
             value = state.username,
             onValueChange = viewModel::updateUsername,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
+            enabled = !state.loading,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Email,
+                imeAction = ImeAction.Next,
+            ),
             label = { Text("用户名或邮箱") },
         )
         OutlinedTextField(
@@ -390,8 +443,36 @@ private fun LoginPanel(
             onValueChange = viewModel::updatePassword,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            enabled = !state.loading,
+            visualTransformation = if (passwordVisible) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    keyboardController?.hide()
+                    if (canSubmitLogin) {
+                        viewModel.login()
+                    }
+                },
+            ),
+            trailingIcon = {
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        imageVector = if (passwordVisible) {
+                            Icons.Outlined.VisibilityOff
+                        } else {
+                            Icons.Outlined.Visibility
+                        },
+                        contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
+                    )
+                }
+            },
             label = { Text("密码") },
         )
         OutlinedTextField(
@@ -399,6 +480,8 @@ private fun LoginPanel(
             onValueChange = viewModel::updateDeviceName,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
+            enabled = !state.loading,
+            supportingText = { Text("显示在网页端的设备名称，便于识别本机。") },
             label = { Text("设备名称") },
         )
         TurnstileVerificationPanel(
@@ -411,13 +494,23 @@ private fun LoginPanel(
         )
         Button(
             modifier = Modifier.fillMaxWidth(),
-            enabled = !state.loading &&
-                !state.turnstileConfigLoading &&
-                state.turnstileConfigError == null &&
-                (!state.requiresHumanVerification || state.turnstileVerified),
-            onClick = viewModel::login,
+            enabled = canSubmitLogin,
+            onClick = {
+                keyboardController?.hide()
+                viewModel.login()
+            },
         ) {
-            ButtonLabel(Icons.AutoMirrored.Outlined.Login, "登录本客户端并签发令牌")
+            if (state.loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text("登录中…")
+            } else {
+                ButtonLabel(Icons.AutoMirrored.Outlined.Login, "登录本客户端并签发令牌")
+            }
         }
         Text(
             text = "这是登录本客户端；如需二次验证，完成 TOTP 或 Passkey 后才会保存客户端令牌。",
@@ -449,7 +542,12 @@ private fun LoginPanel(
                     onValueChange = viewModel::updateTotpCode,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    enabled = !state.loading,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.NumberPassword,
+                        imeAction = ImeAction.Next,
+                    ),
+                    supportingText = { Text("输入身份验证器中的 6 位动态码。") },
                     label = { Text("TOTP 验证码") },
                 )
                 OutlinedTextField(
@@ -457,6 +555,8 @@ private fun LoginPanel(
                     onValueChange = viewModel::updateBackupCode,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    enabled = !state.loading,
+                    supportingText = { Text("无法使用动态码时，可改用备用恢复码。") },
                     label = { Text("备用恢复码") },
                 )
                 Button(
@@ -496,6 +596,8 @@ private fun LoginPanel(
             subtitle = "适合已在网页端完成二次验证后手动授权本机。",
             icon = Icons.Outlined.Security,
         )
+        val jwtClipboard = LocalClipboard.current
+        val jwtScope = rememberCoroutineScope()
         OutlinedTextField(
             value = state.manualJwt,
             onValueChange = viewModel::updateManualJwt,
@@ -503,7 +605,34 @@ private fun LoginPanel(
                 .fillMaxWidth()
                 .height(112.dp),
             minLines = 2,
+            enabled = !state.loading,
+            supportingText = { Text("仅粘贴完整 JWT，应用不会完整展示令牌内容。") },
             label = { Text("网页端或二次验证后的 JWT") },
+            trailingIcon = {
+                IconButton(
+                    enabled = !state.loading,
+                    onClick = {
+                        jwtScope.launch {
+                            val clip = jwtClipboard.getClipEntry()?.clipData
+                            val pasted = clip
+                                ?.takeIf { it.itemCount > 0 }
+                                ?.getItemAt(0)
+                                ?.text
+                                ?.toString()
+                                ?.trim()
+                                .orEmpty()
+                            if (pasted.isNotBlank()) {
+                                viewModel.updateManualJwt(pasted)
+                            }
+                        }
+                    },
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ContentPaste,
+                        contentDescription = "从剪贴板粘贴 JWT",
+                    )
+                }
+            },
         )
         OutlinedButton(
             modifier = Modifier.fillMaxWidth(),
@@ -520,14 +649,19 @@ private fun QrPanel(
     state: SynapseUiState,
     viewModel: SynapseLoginViewModel,
 ) {
+    var showConfirmWebLogin by rememberSaveable { mutableStateOf(false) }
+    val qrClipboard = LocalClipboard.current
+    val qrScope = rememberCoroutineScope()
     val qrPayloadHelperText = state.qrPayloadError
         ?: if (state.hasUsableQrPayload) {
             "二维码有效，确认前请核对目标站点和账号。"
         } else {
             "扫描或粘贴 synapse://mobile-login 二维码 payload。"
         }
+    val canConfirmWebLogin =
+        !state.loading && state.hasUsableQrPayload && state.hasAnyWebLoginCredential
 
-    PanelColumn(state = state) {
+    PanelColumn(state = state, onDismissFeedback = viewModel::clearFeedback) {
         SectionTitle(
             text = "确认网页登录",
             subtitle = "扫描网页二维码后，核对目标站点并选择本机账号确认。",
@@ -542,7 +676,10 @@ private fun QrPanel(
             InfoCard(
                 title = "需要先登录本客户端",
                 icon = Icons.Outlined.WarningAmber,
-                lines = listOf("确认网页登录前，请先完成本客户端登录并签发令牌。"),
+                lines = listOf(
+                    "确认网页登录前，请先在「本客户端登录」完成授权并签发令牌。",
+                    "至少需要 JWT 或 SML 登录令牌之一。",
+                ),
             )
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -552,7 +689,7 @@ private fun QrPanel(
                 onClick = { viewModel.setScannerVisible(!state.showScanner) },
             ) {
                 ButtonLabel(
-                    icon = if (state.showScanner) Icons.Outlined.ErrorOutline else Icons.Outlined.CameraAlt,
+                    icon = if (state.showScanner) Icons.Outlined.Close else Icons.Outlined.CameraAlt,
                     text = if (state.showScanner) "关闭相机" else "扫描网页登录二维码",
                 )
             }
@@ -579,10 +716,50 @@ private fun QrPanel(
                 .fillMaxWidth()
                 .heightIn(min = 128.dp),
             minLines = 3,
+            enabled = !state.loading,
             isError = state.qrPayloadError != null,
             supportingText = { Text(qrPayloadHelperText) },
             label = { Text("网页登录二维码 payload") },
+            trailingIcon = {
+                IconButton(
+                    enabled = !state.loading,
+                    onClick = {
+                        qrScope.launch {
+                            val clip = qrClipboard.getClipEntry()?.clipData
+                            val pasted = clip
+                                ?.takeIf { it.itemCount > 0 }
+                                ?.getItemAt(0)
+                                ?.text
+                                ?.toString()
+                                ?.trim()
+                                .orEmpty()
+                            if (pasted.isNotBlank()) {
+                                viewModel.updateManualQrPayload(pasted)
+                            }
+                        }
+                    },
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ContentPaste,
+                        contentDescription = "从剪贴板粘贴二维码 payload",
+                    )
+                }
+            },
         )
+
+        if (state.manualQrPayload.isNotBlank()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(
+                    enabled = !state.loading,
+                    onClick = viewModel::clearQrPayload,
+                ) {
+                    ButtonLabel(Icons.Outlined.DeleteOutline, "清除二维码")
+                }
+            }
+        }
 
         state.parsedQrPayload?.let { payload ->
             InfoCard(
@@ -591,18 +768,48 @@ private fun QrPanel(
                 lines = listOf(
                     "目标站点：${payload.apiBaseUrl}",
                     "Session：${payload.sessionId}",
-                    "过期时间：${payload.expiresAt}",
-                    "是否过期：${if (payload.isExpired) "是" else "否"}",
+                    "过期时间：${SynapseTokenExpiry.formatInstantDisplay(payload.expiresAt)}",
+                    "状态：${if (payload.isExpired) "已过期，请重新扫码" else "有效，可继续确认"}",
                 ),
             )
         }
 
         Button(
             modifier = Modifier.fillMaxWidth(),
-            enabled = !state.loading && state.hasUsableQrPayload && state.hasAnyWebLoginCredential,
-            onClick = viewModel::confirmQrLogin,
+            enabled = canConfirmWebLogin,
+            onClick = { showConfirmWebLogin = true },
         ) {
-            ButtonLabel(Icons.AutoMirrored.Outlined.Login, "确认登录网页端")
+            if (state.loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text("确认中…")
+            } else {
+                ButtonLabel(Icons.AutoMirrored.Outlined.Login, "确认登录网页端")
+            }
+        }
+
+        if (showConfirmWebLogin) {
+            state.parsedQrPayload?.let { payload ->
+                val activeName = state.credentials.activeAccount?.displayName
+                    ?: state.credentials.displayName
+                    ?: "当前账号"
+                ConfirmActionDialog(
+                    title = "确认登录网页端",
+                    message = "将使用「$activeName」确认登录：\n${payload.apiBaseUrl}\n\n请确认这是你本人发起的网页登录请求。",
+                    confirmText = "确认登录",
+                    confirmIcon = Icons.AutoMirrored.Outlined.Login,
+                    destructive = false,
+                    onConfirm = {
+                        showConfirmWebLogin = false
+                        viewModel.confirmQrLogin()
+                    },
+                    onDismiss = { showConfirmWebLogin = false },
+                )
+            }
         }
 
         if (state.showWebLoginAccountPicker) {
@@ -717,7 +924,7 @@ private fun SessionPanel(
     var showRevokeConfirmation by rememberSaveable { mutableStateOf(false) }
     var showClearConfirmation by rememberSaveable { mutableStateOf(false) }
 
-    PanelColumn(state = state) {
+    PanelColumn(state = state, onDismissFeedback = viewModel::clearFeedback) {
         SectionTitle(
             text = "本地会话",
             subtitle = "管理当前设备上的授权状态和本机令牌。",
@@ -728,13 +935,33 @@ private fun SessionPanel(
             viewModel = viewModel,
             title = "设备与凭据",
         )
+        if (!state.hasStoredAccount) {
+            InfoCard(
+                title = "暂无本地会话",
+                icon = Icons.Outlined.Info,
+                lines = listOf(
+                    "还没有保存账号。请先到「本客户端登录」完成授权。",
+                    "登录成功后可在这里自动登录、撤销令牌或清理凭据。",
+                ),
+            )
+        }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !state.loading && state.hasCurrentClientLoginToken,
-            onClick = viewModel::silentLogin,
-        ) {
-                ButtonLabel(Icons.AutoMirrored.Outlined.Login, "自动登录本客户端")
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.loading && state.hasCurrentClientLoginToken,
+                onClick = viewModel::silentLogin,
+            ) {
+                if (state.loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("处理中…")
+                } else {
+                    ButtonLabel(Icons.AutoMirrored.Outlined.Login, "自动登录本客户端")
+                }
             }
             OutlinedButton(
                 modifier = Modifier.fillMaxWidth(),
@@ -849,7 +1076,10 @@ private fun CredentialSummary(
                 value = active.clientLoginTokenPreview ?: "未保存",
                 copyValue = "",
             )
-            CopyableLine("SML 过期时间", active.clientLoginTokenExpiresAt ?: "未保存")
+            CopyableLine(
+                label = "SML 过期时间",
+                value = SynapseTokenExpiry.formatDisplay(active.clientLoginTokenExpiresAt) ?: "未保存",
+            )
             Text(
                 text = when {
                     active.clientLoginToken == null && active.clientLoginTokenExpiresAt != null ->
@@ -990,14 +1220,20 @@ private fun ConfirmActionDialog(
     confirmText: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
+    confirmIcon: ImageVector = Icons.Outlined.DeleteOutline,
+    destructive: Boolean = true,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
             Icon(
-                imageVector = Icons.Outlined.WarningAmber,
+                imageVector = if (destructive) Icons.Outlined.WarningAmber else Icons.Outlined.VerifiedUser,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.error,
+                tint = if (destructive) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
             )
         },
         title = { Text(title) },
@@ -1009,7 +1245,7 @@ private fun ConfirmActionDialog(
         },
         confirmButton = {
             Button(onClick = onConfirm) {
-                ButtonLabel(Icons.Outlined.DeleteOutline, confirmText)
+                ButtonLabel(confirmIcon, confirmText)
             }
         },
         dismissButton = {
@@ -1023,6 +1259,7 @@ private fun ConfirmActionDialog(
 @Composable
 private fun PanelColumn(
     state: SynapseUiState,
+    onDismissFeedback: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -1045,7 +1282,10 @@ private fun PanelColumn(
                     state = state,
                     compact = compactHeader,
                 )
-                StatusBanner(state = state)
+                StatusBanner(
+                    state = state,
+                    onDismiss = onDismissFeedback,
+                )
                 content()
                 Spacer(Modifier.height(12.dp))
             }
@@ -1156,3 +1396,9 @@ private fun InfoCard(
         }
     }
 }
+
+
+
+
+
+
