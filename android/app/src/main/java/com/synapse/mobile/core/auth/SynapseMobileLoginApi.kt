@@ -25,6 +25,38 @@ class SynapseMobileLoginApi(
                 },
         ) { it.toStandardLoginResult() }
 
+
+    suspend fun getGoogleAuthConfig(): GoogleAuthConfig =
+        get(
+            path = "/api/auth/google/config",
+        ) { it.toGoogleAuthConfig() }
+
+    /**
+     * Happy-TTS primary web path: bind-session may return JWT immediately
+     * (identity already linked) or requireBinding with a provider bind session.
+     */
+    suspend fun googleBindSession(idToken: String): GoogleSignInBackendResult =
+        post(
+            path = "/api/auth/google/bind-session",
+            body = JSONObject().put("idToken", idToken),
+        ) { it.toGoogleSignInBackendResult() }
+
+    /**
+     * Direct Google login that always upserts/creates account and returns JWT.
+     * Used as a mobile fallback when bind-session requires web-only binding UI.
+     */
+    suspend fun googleAuth(idToken: String): GoogleAuthLoginResult {
+        val result = post(
+            path = "/api/auth/google",
+            body = JSONObject().put("idToken", idToken),
+        ) { it.toGoogleSignInBackendResult() }
+        return when (result) {
+            is GoogleSignInBackendResult.Authenticated -> result.login
+            is GoogleSignInBackendResult.RequiresBinding ->
+                throw IllegalStateException("Google 登录返回了绑定会话，请使用 bind-session 流程。")
+        }
+    }
+
     suspend fun getTurnstilePublicConfig(): TurnstilePublicConfig =
         get(
             path = "/api/turnstile/public-config",

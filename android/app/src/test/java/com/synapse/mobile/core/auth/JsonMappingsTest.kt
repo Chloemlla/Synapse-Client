@@ -162,4 +162,81 @@ class JsonMappingsTest {
         assertTrue(result.options.hasChallenge)
         assertEquals(0, result.options.allowCredentialCount)
     }
+@Test
+    fun googleAuthConfigMapsSummary() {
+        val result = JSONObject(
+            """
+            {
+              "enabled": true,
+              "clientIdConfigured": true,
+              "clientId": "17055657909-example.apps.googleusercontent.com"
+            }
+            """.trimIndent(),
+        ).toGoogleAuthConfig()
+
+        assertTrue(result.enabled)
+        assertTrue(result.clientIdConfigured)
+        assertTrue(result.canSignIn)
+        assertEquals("17055657909-example.apps.googleusercontent.com", result.clientId)
+    }
+
+    @Test
+    fun googleAuthConfigDisablesWithoutClientId() {
+        val result = JSONObject(
+            """
+            {
+              "enabled": true,
+              "clientIdConfigured": false,
+              "clientId": ""
+            }
+            """.trimIndent(),
+        ).toGoogleAuthConfig()
+
+        assertFalse(result.canSignIn)
+    }
+
+    @Test
+    fun googleBindSessionMapsAuthenticatedPayload() {
+        val result = JSONObject(
+            """
+            {
+              "requiresBinding": false,
+              "token": "jwt-google",
+              "user": {
+                "id": "user-g1",
+                "username": "google_user",
+                "email": "user@gmail.com",
+                "role": "user"
+              },
+              "isNewUser": false,
+              "provider": "google"
+            }
+            """.trimIndent(),
+        ).toGoogleSignInBackendResult()
+
+        val login = result as GoogleSignInBackendResult.Authenticated
+        assertEquals("jwt-google", login.login.token)
+        assertEquals("google_user", login.login.user.username)
+        assertEquals("google", login.login.provider)
+        assertFalse(login.login.isNewUser)
+    }
+
+    @Test
+    fun googleBindSessionMapsRequiresBinding() {
+        val result = JSONObject(
+            """
+            {
+              "requiresBinding": true,
+              "provider": "google",
+              "session": {
+                "sessionToken": "bind-session-token"
+              }
+            }
+            """.trimIndent(),
+        ).toGoogleSignInBackendResult()
+
+        val binding = result as GoogleSignInBackendResult.RequiresBinding
+        assertEquals("bind-session-token", binding.session.sessionToken)
+        assertEquals("google", binding.session.provider)
+    }
 }

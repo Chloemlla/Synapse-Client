@@ -4,6 +4,7 @@ import com.synapse.mobile.core.auth.PasskeyAuthenticationOptions
 import com.synapse.mobile.core.auth.PendingTwoFactorChallenge
 import com.synapse.mobile.core.auth.StoredSynapseCredentials
 import com.synapse.mobile.core.auth.SynapseQrPayload
+import com.synapse.mobile.core.auth.GoogleAuthConfig
 import com.synapse.mobile.core.auth.TurnstilePublicConfig
 
 enum class SynapseTab(val label: String) {
@@ -28,6 +29,9 @@ data class SynapseUiState(
     val passkeyOptions: PasskeyAuthenticationOptions? = null,
     val passkeyChallenge: String? = null,
     val passkeyAssertionJson: String = "",
+    val googleAuthConfig: GoogleAuthConfig = GoogleAuthConfig(enabled = false, clientIdConfigured = false, clientId = null),
+    val googleAuthConfigLoading: Boolean = true,
+    val googleAuthConfigError: String? = null,
     val turnstileConfig: TurnstilePublicConfig = TurnstilePublicConfig(enabled = false, siteKey = null),
     val turnstileConfigLoading: Boolean = true,
     val turnstileConfigError: String? = null,

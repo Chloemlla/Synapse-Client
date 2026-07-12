@@ -160,6 +160,32 @@ data class SynapseQrPayload(
     }
 }
 
+
+data class GoogleAuthConfig(
+    val enabled: Boolean,
+    val clientIdConfigured: Boolean,
+    val clientId: String?,
+) {
+    val canSignIn: Boolean = enabled && clientIdConfigured && !clientId.isNullOrBlank()
+}
+
+data class GoogleAuthLoginResult(
+    val token: String,
+    val user: SynapseUser,
+    val isNewUser: Boolean,
+    val provider: String,
+)
+
+data class GoogleBindSessionRequired(
+    val sessionToken: String,
+    val provider: String,
+)
+
+sealed interface GoogleSignInBackendResult {
+    data class Authenticated(val login: GoogleAuthLoginResult) : GoogleSignInBackendResult
+    data class RequiresBinding(val session: GoogleBindSessionRequired) : GoogleSignInBackendResult
+}
+
 class SynapseApiException(
     val statusCode: Int,
     message: String,

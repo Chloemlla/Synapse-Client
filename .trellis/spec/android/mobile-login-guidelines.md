@@ -190,6 +190,10 @@ Networking contract:
 | TOTP verify returns a JWT | Save the JWT encrypted, then issue and save the client login token |
 | Passkey start returns WebAuthn `options` | Keep the raw options for the native/browser assertion flow, but show only a summary; do not display `challenge` or credential IDs in full |
 | Passkey finish returns a JWT | Save the JWT encrypted, then issue and save the client login token |
+| Google config returns enabled=true with clientId | Show SIWG entry; use Credential Manager with that serverClientId |
+| Google bind-session returns JWT | Save JWT encrypted, issue client login token |
+| Google bind-session returns requiresBinding=true | Fall back to POST /api/auth/google for mobile auto upsert |
+| Google login disabled/unconfigured | Hide or disable SIWG entry; allow password/passkey login |
 | Client token exchange returns 401 | Clear local credentials and require login |
 | Stored `sml_` `expiresAt` is in the past | Clear that account's JWT and `sml_` token locally, keep the account metadata and expiration time, and require authorization login again |
 | JWT confirm returns 401 and client token exists | Clear local JWT and retry confirm with client token |
@@ -265,3 +269,13 @@ require(apiBaseUrl.startsWith("https://"))
 SynapseSecureOkHttpFactory.create(baseUrl = SynapseApiOriginPolicy.normalizeHttpsOrigin(baseUrl))
 credentialStore.saveClientLoginToken(clientLoginToken, expiresAt)
 ```
+
+### Google Sign-In (Credential Manager SIWG)
+
+- Load `GET /api/auth/google/config` for `enabled` + Web `clientId` (`serverClientId`).
+- Use `CredentialManager` + `GetGoogleIdOption` / `GetSignInWithGoogleOption` to obtain a Google ID token.
+- Exchange via Happy-TTS: prefer `POST /api/auth/google/bind-session`; if `requiresBinding=true`, fall back to `POST /api/auth/google` (mobile has no web bind UI).
+- On JWT success: encrypt JWT, then `POST /api/auth/mobile-login/client-token/issue`.
+- Never log or display full Google idToken, JWT, or SML token.
+- Dependencies: `androidx.credentials:credentials`, `credentials-play-services-auth`, `com.google.android.libraries.identity.googleid:googleid`.
+

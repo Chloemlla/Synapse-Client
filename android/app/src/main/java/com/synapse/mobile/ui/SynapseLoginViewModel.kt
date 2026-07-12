@@ -5,10 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.synapse.mobile.core.auth.LoginOutcome
+import com.synapse.mobile.core.auth.GoogleAuthConfig
 import com.synapse.mobile.core.auth.PasskeyAuthenticationOptions
 import com.synapse.mobile.core.auth.SynapseAuthRepository
 import com.synapse.mobile.core.auth.SynapsePasskeyJson
 import com.synapse.mobile.core.auth.SynapsePasskeyCredentialClient
+import com.synapse.mobile.core.auth.SynapseGoogleCredentialClient
 import com.synapse.mobile.core.auth.SynapseQrPayload
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +41,7 @@ class SynapseLoginViewModel(
             }
         }
         loadTurnstileConfig()
+        loadGoogleAuthConfig()
     }
 
     fun selectTab(tab: SynapseTab) {
@@ -545,6 +548,95 @@ class SynapseLoginViewModel(
         }
     }
 
+
+    fun loadGoogleAuthConfig() {
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(
+                    googleAuthConfigLoading = true,
+                    googleAuthConfigError = null,
+                )
+            }
+            runCatching { repository.getGoogleAuthConfig() }
+                .onSuccess { config ->
+                    mutableState.update {
+                        it.copy(
+                            googleAuthConfig = config,
+                            googleAuthConfigLoading = false,
+                            googleAuthConfigError = null,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(
+                            googleAuthConfig = GoogleAuthConfig(
+                                enabled = false,
+                                clientIdConfigured = false,
+                                clientId = null,
+                            ),
+                            googleAuthConfigLoading = false,
+                            googleAuthConfigError = error.message ?: error::class.java.simpleName,
+                        )
+                    }
+                }
+        }
+    }
+
+    fun signInWithGoogle(
+        activity: Activity,
+        googleClient: SynapseGoogleCredentialClient,
+    ) {
+        launchAction {
+            val config = mutableState.value.googleAuthConfig
+            val clientId = config.clientId?.takeIf { it.isNotBlank() }
+            if (!config.canSignIn || clientId == null) {
+                // Refresh once in case config was not loaded yet.
+                val refreshed = repository.getGoogleAuthConfig()
+                mutableState.update {
+                    it.copy(
+                        googleAuthConfig = refreshed,
+                        googleAuthConfigLoading = false,
+                        googleAuthConfigError = null,
+                    )
+                }
+                if (!refreshed.canSignIn || refreshed.clientId.isNullOrBlank()) {
+                    throw IllegalStateException(
+                        refreshed.let { cfg ->
+                            when {
+                                !cfg.enabled -> "当前服务端未启用 Google 登录。"
+                                !cfg.clientIdConfigured || cfg.clientId.isNullOrBlank() -> "服务端未配置 Google Client ID。"
+                                else -> "Google 登录不可用。"
+                            }
+                        },
+                    )
+                }
+            }
+            val serverClientId = mutableState.value.googleAuthConfig.clientId
+                ?.takeIf { it.isNotBlank() }
+                ?: throw IllegalStateException("缺少 Google Client ID。")
+            val idToken = googleClient.getGoogleIdToken(
+                activity = activity,
+                serverClientId = serverClientId,
+            )
+            val outcome = repository.signInWithGoogleIdToken(
+                idToken = idToken,
+                deviceName = mutableState.value.deviceName,
+            )
+            mutableState.update {
+                it.copy(
+                    credentials = repository.credentials(),
+                    pendingTwoFactorChallenge = null,
+                    passkeyOptions = null,
+                    passkeyChallenge = null,
+                    passkeyAssertionJson = "",
+                    password = "",
+                )
+            }
+            val name = outcome.user?.username ?: outcome.user?.email ?: "当前账号"
+            "Google 登录成功，已登录本客户端并签发客户端登录令牌。当前账号：$name"
+        }
+    }
     fun silentLogin() {
         launchAction {
             val result = repository.silentLogin()

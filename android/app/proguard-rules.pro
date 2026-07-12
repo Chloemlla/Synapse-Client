@@ -58,3 +58,6 @@
 -keep class androidx.credentials.** { *; }
 -keep class com.google.android.gms.auth.** { *; }
 -dontwarn com.google.android.gms.auth.**
+# Google Identity / SIWG Credential Manager helpers
+-keep class com.google.android.libraries.identity.googleid.** { *; }
+-dontwarn com.google.android.libraries.identity.googleid.**

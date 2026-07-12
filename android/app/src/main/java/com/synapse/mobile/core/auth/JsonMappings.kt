@@ -114,6 +114,63 @@ internal fun JSONObject.toPasskeyAuthenticationFinishResult(): PasskeyAuthentica
     )
 }
 
+
+internal fun JSONObject.toGoogleAuthConfig(): GoogleAuthConfig {
+    val data = optJSONObject("data")
+    val clientId = (firstString("clientId") ?: data?.firstString("clientId"))
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+    val clientIdConfigured = optBoolean(
+        "clientIdConfigured",
+        data?.optBoolean("clientIdConfigured", !clientId.isNullOrBlank())
+            ?: !clientId.isNullOrBlank(),
+    )
+    val enabled = optBoolean(
+        "enabled",
+        data?.optBoolean("enabled", clientIdConfigured && !clientId.isNullOrBlank())
+            ?: (clientIdConfigured && !clientId.isNullOrBlank()),
+    )
+    return GoogleAuthConfig(
+        enabled = enabled,
+        clientIdConfigured = clientIdConfigured,
+        clientId = clientId,
+    )
+}
+
+internal fun JSONObject.toGoogleSignInBackendResult(): GoogleSignInBackendResult {
+    val data = optJSONObject("data")
+    val requiresBinding = optBoolean("requiresBinding", data?.optBoolean("requiresBinding", false) == true)
+    if (requiresBinding) {
+        val sessionJson = optJSONObject("session") ?: data?.optJSONObject("session")
+        val sessionToken = firstString("sessionToken")
+            ?: sessionJson?.firstString("sessionToken")
+            ?: data?.firstString("sessionToken")
+            ?: throw IllegalStateException("Google 登录需要绑定，但未返回 sessionToken。")
+        val provider = firstString("provider")
+            ?: data?.firstString("provider")
+            ?: "google"
+        return GoogleSignInBackendResult.RequiresBinding(
+            GoogleBindSessionRequired(
+                sessionToken = sessionToken,
+                provider = provider,
+            ),
+        )
+    }
+
+    val userJson = optJSONObject("user") ?: data?.optJSONObject("user")
+        ?: throw IllegalStateException("Google 登录响应缺少用户信息。")
+    val token = firstString("token") ?: data?.firstString("token")
+        ?: throw IllegalStateException("Google 登录响应缺少 JWT。")
+    return GoogleSignInBackendResult.Authenticated(
+        GoogleAuthLoginResult(
+            token = token,
+            user = userJson.toSynapseUser(),
+            isNewUser = optBoolean("isNewUser", data?.optBoolean("isNewUser", false) == true),
+            provider = firstString("provider") ?: data?.firstString("provider") ?: "google",
+        ),
+    )
+}
+
 internal fun JSONObject.toTotpVerificationResult(): TotpVerificationResult {
     val data = optJSONObject("data")
     return TotpVerificationResult(

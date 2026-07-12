@@ -35,6 +35,48 @@ class SynapseAuthRepository(
     suspend fun getTurnstilePublicConfig(): TurnstilePublicConfig =
         apiFor(trustedApiOrigin).getTurnstilePublicConfig()
 
+    suspend fun getGoogleAuthConfig(): GoogleAuthConfig =
+        apiFor(trustedApiOrigin).getGoogleAuthConfig()
+
+    /**
+     * Completes Happy-TTS Google Sign-In with an ID token from Credential Manager.
+     *
+     * Prefer [SynapseMobileLoginApi.googleBindSession] (web parity). If the backend
+     * requires account binding that needs a web UI, fall back to
+     * [SynapseMobileLoginApi.googleAuth] which upserts/creates and returns JWT.
+     */
+    suspend fun signInWithGoogleIdToken(
+        idToken: String,
+        deviceName: String,
+    ): LoginOutcome.Authenticated {
+        val cleanIdToken = idToken.trim()
+        require(cleanIdToken.isNotBlank()) { "缺少 Google idToken。" }
+
+        val api = apiFor(trustedApiOrigin)
+        // Web parity: bind-session first. Mobile has no provider-bind UI, so
+        // requiresBinding falls back to POST /api/auth/google (auto upsert).
+        val login = when (val backendResult = api.googleBindSession(cleanIdToken)) {
+            is GoogleSignInBackendResult.Authenticated -> backendResult.login
+            is GoogleSignInBackendResult.RequiresBinding -> api.googleAuth(cleanIdToken)
+        }
+
+        require(login.token.isNotBlank()) { "Google 登录响应未包含 JWT。" }
+        credentialStore.saveJwt(login.token, login.user)
+
+        val issued = api.issueClientToken(
+            jwt = login.token,
+            deviceId = deviceId.getOrCreate(),
+            deviceName = deviceName.ifBlank { defaultDeviceName() },
+        )
+        credentialStore.saveClientLoginToken(issued.clientLoginToken, issued.expiresAt)
+
+        return LoginOutcome.Authenticated(
+            user = login.user,
+            clientTokenExpiresAt = issued.expiresAt,
+        )
+    }
+
+
     suspend fun standardLoginAndIssueClientToken(
         username: String,
         password: String,

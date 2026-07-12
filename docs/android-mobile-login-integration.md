@@ -257,6 +257,103 @@ synapse://mobile-login?sessionId=<sessionId>&scanToken=<scanToken>&apiBaseUrl=<a
 
 ## 接口
 
+### Google 账号登录（Credential Manager SIWG）
+
+安卓端应使用 [Credential Manager Sign in with Google](https://developer.android.google.cn/identity/sign-in/credential-manager-siwg-implementation?hl=zh-cn) 获取 Google ID Token，再对接 Happy-TTS 既有 Google 登录接口。不要在界面中粘贴或展示完整 idToken / JWT。
+
+推荐流程：
+
+1. 调用 `GET /api/auth/google/config` 读取是否启用与 Web `clientId`（即 Credential Manager 的 `serverClientId`）。
+2. 使用 `GetGoogleIdOption`（可先 `filterByAuthorizedAccounts=true`，无凭据再放宽或改用 `GetSignInWithGoogleOption`）调用 `CredentialManager.getCredential()`。
+3. 从 `GoogleIdTokenCredential` 取出 `idToken`。
+4. 优先 `POST /api/auth/google/bind-session`（与网页端一致）。若返回 `requiresBinding=true`，移动端无绑定 UI 时改为 `POST /api/auth/google` 完成自动建号/关联。
+5. 收到正式 JWT 后加密保存，并立即调用 `/api/auth/mobile-login/client-token/issue`。
+
+依赖：`androidx.credentials:credentials`、`androidx.credentials:credentials-play-services-auth`、`com.google.android.libraries.identity.googleid:googleid`。设备需具备可用的 Google 账号与 Google Play 服务。
+
+### Google 登录配置
+
+`GET /api/auth/google/config`
+
+响应：
+
+```json
+{
+  "enabled": true,
+  "clientIdConfigured": true,
+  "clientId": "xxxxx.apps.googleusercontent.com"
+}
+```
+
+### Google 绑定会话登录
+
+`POST /api/auth/google/bind-session`
+
+请求：
+
+```json
+{
+  "idToken": "google-id-token"
+}
+```
+
+已绑定身份时返回 JWT：
+
+```json
+{
+  "requiresBinding": false,
+  "token": "jwt",
+  "user": {
+    "id": "string",
+    "username": "string",
+    "email": "string",
+    "role": "user"
+  },
+  "isNewUser": false,
+  "provider": "google"
+}
+```
+
+需要网页绑定 UI 时：
+
+```json
+{
+  "requiresBinding": true,
+  "provider": "google",
+  "session": {
+    "sessionToken": "provider-bind-session-token"
+  }
+}
+```
+
+### Google 直接登录
+
+`POST /api/auth/google`
+
+请求：
+
+```json
+{
+  "idToken": "google-id-token"
+}
+```
+
+响应：
+
+```json
+{
+  "token": "jwt",
+  "user": {
+    "id": "string",
+    "username": "string",
+    "email": "string",
+    "role": "user"
+  },
+  "isNewUser": false,
+  "provider": "google"
+}
+```
+
 ### Web 创建扫码挑战
 
 `POST /api/auth/mobile-login/challenge`

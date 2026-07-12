@@ -1,6 +1,7 @@
 package com.synapse.mobile.ui
 
 import com.synapse.mobile.core.auth.SynapsePasskeyCredentialClient
+import com.synapse.mobile.core.auth.SynapseGoogleCredentialClient
 
 import android.app.Activity
 import android.content.ClipData
@@ -628,6 +629,55 @@ private fun LoginPanel(
                 ButtonLabel(Icons.Outlined.Key, "使用通行密钥直接登录（无需密码）")
             }
         }
+        if (state.googleAuthConfig.canSignIn || state.googleAuthConfigLoading || state.googleAuthConfigError != null) {
+            SectionTitle(
+                text = "使用 Google 账号登录",
+                subtitle = "通过 Credential Manager 获取 Google ID Token，对接 Happy-TTS /api/auth/google。",
+            )
+            if (state.googleAuthConfigLoading) {
+                Text(
+                    text = "正在检查 Google 登录配置…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else if (state.googleAuthConfigError != null) {
+                InfoCard(
+                    icon = Icons.Outlined.WarningAmber,
+                    title = "Google 登录配置不可用",
+                    lines = listOf(
+                        state.googleAuthConfigError ?: "无法加载 Google 登录配置。",
+                        "可稍后重试，或继续使用密码 / 通行密钥登录。",
+                    ),
+                )
+                OutlinedButton(
+                    onClick = viewModel::loadGoogleAuthConfig,
+                    enabled = !state.loading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    ButtonLabel(Icons.Outlined.Security, "重新加载 Google 登录配置")
+                }
+            } else if (state.googleAuthConfig.canSignIn) {
+                val context = LocalContext.current
+                val activity = remember(context) { context.findActivity() }
+                val googleClient = remember(context) { SynapseGoogleCredentialClient(context) }
+                Button(
+                    onClick = {
+                        val host = activity ?: return@Button
+                        viewModel.signInWithGoogle(host, googleClient)
+                    },
+                    enabled = !state.loading && activity != null,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    ButtonLabel(Icons.Outlined.AccountCircle, "使用 Google 账号登录")
+                }
+                Text(
+                    text = "将唤起系统 Google 账号选择；登录成功后自动签发本机 SML 令牌。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         SectionTitle(
             text = "用网页端 JWT 登录本客户端",
             subtitle = "适合已在网页端完成二次验证后手动授权本机。",
