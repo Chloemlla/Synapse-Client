@@ -101,6 +101,24 @@ API 地址：https://tts.chloemlla.com
 
 安卓端收到正式 JWT 后应加密保存 JWT，并立即调用客户端登录令牌签发接口。
 
+### Passkey（Android Credential Manager）
+
+安卓端应使用 [Credential Manager](https://developer.android.google.cn/identity/passkeys/sign-in-with-passkeys?hl=zh-cn) 完成通行密钥认证，而不是在界面中手工粘贴 assertion JSON。
+
+推荐流程：
+
+1. 二次验证场景：密码登录返回 `requires2FA` 且 `twoFactorType` 包含 `Passkey` 后，调用 `POST /api/passkey/authenticate/start`。
+2. 免密 Discoverable 场景：直接调用 `POST /api/passkey/authenticate/start/discoverable`（无需用户名）。
+3. 将返回的 `options`（PublicKeyCredentialRequestOptions）交给 `GetPublicKeyCredentialOption`。
+4. 通过 `CredentialManager.getCredential()` 获取 `PublicKeyCredential.authenticationResponseJson`。
+5. 二次验证场景把 assertion 发到 `POST /api/passkey/authenticate/finish`（含 `username` + `clientOrigin`）。
+6. Discoverable 场景把 assertion 发到 `POST /api/passkey/authenticate/finish/discoverable`（含 `response`、可选 `challenge`、`clientOrigin`）。
+7. 收到正式 JWT 后加密保存，并立即调用 `/api/auth/mobile-login/client-token/issue`。
+
+界面只应展示 challenge 是否已返回、`rpId`、credential 数量与 `userVerification`，不要完整展示 challenge 或 credential id。
+
+应用需与 RP 域名完成 Digital Asset Links 关联后，本机保存的通行密钥才能被 Credential Manager 发现。
+
 ### Passkey 开始认证
 
 `POST /api/passkey/authenticate/start`
@@ -168,6 +186,55 @@ API 地址：https://tts.chloemlla.com
 ```
 
 安卓端收到正式 JWT 后应加密保存 JWT，并立即调用客户端登录令牌签发接口。
+
+### Passkey Discoverable 开始认证
+
+`POST /api/passkey/authenticate/start/discoverable`
+
+请求：
+
+```json
+{
+  "clientOrigin": "https://tts.chloemlla.com"
+}
+```
+
+响应：
+
+```json
+{
+  "options": {
+    "challenge": "string",
+    "rpId": "string",
+    "userVerification": "required"
+  },
+  "challenge": "string"
+}
+```
+
+Discoverable 模式通常不带 `allowCredentials`，由 Credential Manager 发现本机通行密钥。
+
+### Passkey Discoverable 完成认证
+
+`POST /api/passkey/authenticate/finish/discoverable`
+
+请求：
+
+```json
+{
+  "response": {
+    "id": "credential-id",
+    "rawId": "credential-id",
+    "type": "public-key",
+    "response": {}
+  },
+  "challenge": "string",
+  "clientOrigin": "https://tts.chloemlla.com"
+}
+```
+
+成功响应与指定用户 finish 接口相同，返回正式 JWT 与 `user`。
+
 
 ## 二维码 Payload
 

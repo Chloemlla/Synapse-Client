@@ -71,10 +71,13 @@ data class PasskeyAuthenticationOptions(
     val rpId: String?,
     val allowCredentialCount: Int,
     val userVerification: String?,
+    val challenge: String? = null,
+    val discoverable: Boolean = false,
 ) {
     val summaryLines: List<String> = listOfNotNull(
         "Challenge：${if (hasChallenge) "已返回" else "未返回"}",
         rpId?.takeIf { it.isNotBlank() }?.let { "RP ID：$it" },
+        if (discoverable) "模式：Discoverable（无需用户名）" else "模式：指定用户",
         "Credential 数量：$allowCredentialCount",
         userVerification?.takeIf { it.isNotBlank() }?.let { "User Verification：$it" },
     )
@@ -82,6 +85,8 @@ data class PasskeyAuthenticationOptions(
 
 data class PasskeyAuthenticationStartResult(
     val options: PasskeyAuthenticationOptions,
+    val challenge: String? = null,
+    val discoverable: Boolean = false,
 )
 
 data class PasskeyAuthenticationFinishResult(

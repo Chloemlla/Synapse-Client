@@ -1,6 +1,11 @@
 package com.synapse.mobile.ui
 
+import com.synapse.mobile.core.auth.SynapsePasskeyCredentialClient
+
+import android.app.Activity
 import android.content.ClipData
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -65,6 +70,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -74,6 +80,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -569,26 +576,46 @@ private fun LoginPanel(
             }
         }
         state.passkeyOptions?.let { options ->
+            val context = LocalContext.current
+            val activity = remember(context) { context.findActivity() }
+            val passkeyClient = remember(context) { SynapsePasskeyCredentialClient(context) }
             InfoCard(
-                title = "Passkey 认证选项",
+                title = if (options.discoverable) "Discoverable Passkey 认证选项" else "Passkey 认证选项",
                 icon = Icons.Outlined.Key,
-                lines = options.summaryLines,
-            )
-            OutlinedTextField(
-                value = state.passkeyAssertionJson,
-                onValueChange = viewModel::updatePasskeyAssertionJson,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(112.dp),
-                minLines = 2,
-                label = { Text("Passkey assertion response JSON") },
+                lines = options.summaryLines + listOf(
+                    "将调用系统 Credential Manager 完成通行密钥验证。",
+                    "不会在界面展示 challenge 或 credential id 原文。",
+                ),
             )
             Button(
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !state.loading && state.passkeyAssertionJson.isNotBlank(),
-                onClick = viewModel::finishPasskeyAuthentication,
+                enabled = !state.loading && activity != null,
+                onClick = {
+                    val host = activity
+                    if (host == null) {
+                        return@Button
+                    }
+                    viewModel.authenticateWithPasskey(host, passkeyClient)
+                },
             ) {
-                ButtonLabel(Icons.Outlined.Key, "完成 Passkey 并登录本客户端")
+                ButtonLabel(Icons.Outlined.Key, "使用系统通行密钥验证并登录")
+            }
+            if (activity == null) {
+                Text(
+                    text = "当前界面无法获取 Activity，暂不能唤起 Credential Manager。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+        // Passwordless discoverable entry is available even without a prior password 2FA challenge.
+        if (state.pendingTwoFactorChallenge == null) {
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.loading,
+                onClick = viewModel::startDiscoverablePasskeyAuthentication,
+            ) {
+                ButtonLabel(Icons.Outlined.Key, "使用通行密钥直接登录（无需密码）")
             }
         }
         SectionTitle(
@@ -1397,8 +1424,8 @@ private fun InfoCard(
     }
 }
 
-
-
-
-
-
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}

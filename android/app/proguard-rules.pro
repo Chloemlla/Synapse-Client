@@ -52,3 +52,9 @@
 # Compose and lifecycle warnings are dependency-internal; app code remains obfuscatable.
 -dontwarn androidx.compose.**
 -dontwarn androidx.lifecycle.**
+
+# Credential Manager / Passkey (Play Services auth provider)
+-dontwarn androidx.credentials.**
+-keep class androidx.credentials.** { *; }
+-keep class com.google.android.gms.auth.** { *; }
+-dontwarn com.google.android.gms.auth.**

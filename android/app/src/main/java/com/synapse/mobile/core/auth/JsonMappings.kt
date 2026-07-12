@@ -70,16 +70,38 @@ internal fun JSONObject.toJwtExchangeResult(): JwtExchangeResult =
         user = getJSONObject("user").toSynapseUser(),
     )
 
-internal fun JSONObject.toPasskeyAuthenticationStartResult(): PasskeyAuthenticationStartResult {
-    val optionsJson = optJSONObject("options") ?: optJSONObject("data")?.optJSONObject("options") ?: JSONObject()
-    return PasskeyAuthenticationStartResult(
-        options = PasskeyAuthenticationOptions(
+internal fun JSONObject.toPasskeyAuthenticationStartResult(
+    discoverable: Boolean = false,
+): PasskeyAuthenticationStartResult {
+    val optionsJson = optJSONObject("options")
+        ?: optJSONObject("data")?.optJSONObject("options")
+        ?: optJSONObject("publicKey")
+        ?: this.takeIf { has("challenge") || has("rpId") || has("rpID") }
+        ?: JSONObject()
+    val challenge = firstString("challenge")
+        ?: optionsJson.firstString("challenge")
+    val summarized = try {
+        SynapsePasskeyJson.summarizeOptions(optionsJson.toString())
+    } catch (_: Exception) {
+        PasskeyAuthenticationOptions(
             rawJson = optionsJson.toString(),
             hasChallenge = optionsJson.firstString("challenge") != null,
-            rpId = optionsJson.firstString("rpId"),
+            rpId = optionsJson.firstString("rpId", "rpID"),
             allowCredentialCount = optionsJson.optJSONArray("allowCredentials")?.length() ?: 0,
             userVerification = optionsJson.firstString("userVerification"),
-        ),
+            challenge = challenge,
+            discoverable = discoverable,
+        )
+    }
+    val options = summarized.copy(
+        challenge = challenge ?: summarized.challenge,
+        discoverable = discoverable,
+        hasChallenge = (challenge ?: summarized.challenge) != null || summarized.hasChallenge,
+    )
+    return PasskeyAuthenticationStartResult(
+        options = options,
+        challenge = challenge ?: options.challenge,
+        discoverable = discoverable,
     )
 }
 

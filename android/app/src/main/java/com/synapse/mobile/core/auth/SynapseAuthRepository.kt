@@ -97,6 +97,11 @@ class SynapseAuthRepository(
         )
     }
 
+    suspend fun startDiscoverablePasskeyAuthentication(): PasskeyAuthenticationStartResult =
+        apiFor(trustedApiOrigin).startDiscoverablePasskeyAuthentication(
+            clientOrigin = trustedApiOrigin,
+        )
+
     suspend fun finishPasskeyAuthentication(
         username: String,
         assertionResponse: JSONObject,
@@ -110,6 +115,28 @@ class SynapseAuthRepository(
             response = assertionResponse,
             clientOrigin = trustedApiOrigin,
         )
+        return persistPasskeyLogin(api, result, deviceName)
+    }
+
+    suspend fun finishDiscoverablePasskeyAuthentication(
+        assertionResponse: JSONObject,
+        challenge: String?,
+        deviceName: String,
+    ): LoginOutcome.Authenticated {
+        val api = apiFor(trustedApiOrigin)
+        val result = api.finishDiscoverablePasskeyAuthentication(
+            response = assertionResponse,
+            challenge = challenge,
+            clientOrigin = trustedApiOrigin,
+        )
+        return persistPasskeyLogin(api, result, deviceName)
+    }
+
+    private suspend fun persistPasskeyLogin(
+        api: SynapseMobileLoginApi,
+        result: PasskeyAuthenticationFinishResult,
+        deviceName: String,
+    ): LoginOutcome.Authenticated {
         require(result.token.isNotBlank()) { "Passkey response did not include a JWT." }
         credentialStore.saveJwt(result.token, result.user)
 

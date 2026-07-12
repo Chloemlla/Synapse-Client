@@ -108,7 +108,13 @@ class SynapseMobileLoginApi(
             body = JSONObject()
                 .put("username", username)
                 .put("clientOrigin", clientOrigin),
-        ) { it.toPasskeyAuthenticationStartResult() }
+        ) { it.toPasskeyAuthenticationStartResult(discoverable = false) }
+
+    suspend fun startDiscoverablePasskeyAuthentication(clientOrigin: String): PasskeyAuthenticationStartResult =
+        post(
+            path = "/api/passkey/authenticate/start/discoverable",
+            body = JSONObject().put("clientOrigin", clientOrigin),
+        ) { it.toPasskeyAuthenticationStartResult(discoverable = true) }
 
     suspend fun finishPasskeyAuthentication(
         username: String,
@@ -121,6 +127,23 @@ class SynapseMobileLoginApi(
                 .put("username", username)
                 .put("response", response)
                 .put("clientOrigin", clientOrigin),
+        ) { it.toPasskeyAuthenticationFinishResult() }
+
+    suspend fun finishDiscoverablePasskeyAuthentication(
+        response: JSONObject,
+        challenge: String?,
+        clientOrigin: String,
+    ): PasskeyAuthenticationFinishResult =
+        post(
+            path = "/api/passkey/authenticate/finish/discoverable",
+            body = JSONObject()
+                .put("response", response)
+                .put("clientOrigin", clientOrigin)
+                .apply {
+                    challenge
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { put("challenge", it) }
+                },
         ) { it.toPasskeyAuthenticationFinishResult() }
 
     suspend fun verifyTotp(

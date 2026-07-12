@@ -26,6 +26,7 @@ data class SynapseUiState(
     val qrPayloadError: String? = null,
     val pendingTwoFactorChallenge: PendingTwoFactorChallenge? = null,
     val passkeyOptions: PasskeyAuthenticationOptions? = null,
+    val passkeyChallenge: String? = null,
     val passkeyAssertionJson: String = "",
     val turnstileConfig: TurnstilePublicConfig = TurnstilePublicConfig(enabled = false, siteKey = null),
     val turnstileConfigLoading: Boolean = true,

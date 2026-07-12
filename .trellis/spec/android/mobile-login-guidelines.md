@@ -207,7 +207,7 @@ Base: user has a `clientLoginToken` but no JWT; app exchanges it at startup and 
 
 Multi-account: logging in as a second user appends or updates that account instead of overwriting the first account. The selected account is the only account used for silent login and revoke. QR confirmation with multiple stored accounts must first show an account picker dialog with account identity and credential availability; selecting an account makes it active and then continues `/challenge/confirm`.
 
-Two-factor: standard login returns `requires2FA` with `twoFactorType: ["TOTP", "Passkey"]`; app shows the available methods and a short token preview, then requests Passkey options only when the user chooses Passkey.
+Two-factor: standard login returns `requires2FA` with `twoFactorType: ["TOTP", "Passkey"]`; app shows the available methods and a short token preview, then requests Passkey options only when the user chooses Passkey. Passkey finish must use Android Credential Manager (`GetPublicKeyCredentialOption` + `PublicKeyCredential.authenticationResponseJson`) against Happy-TTS `/api/passkey/authenticate/*` routes; discoverable start/finish is allowed for passwordless login. Never show full challenge/credential ids or keep assertion JSON in UI state after finish.
 
 Bad: app logs a full JWT or client login token, stores a Turnstile widget token, accepts HTTP `apiBaseUrl`, reintroduces client certificate pin secrets, overwrites an existing account when logging in as another user, or confirms a QR login without showing the target site.
 
@@ -223,6 +223,8 @@ Error display: if an API response says only `输入验证失败` in the top-leve
 - Unit test standard login JSON mapping for `requires2FA`, short-lived token fallback from `token`, `twoFactorType`, and `user`.
 - Unit test TOTP finish JSON mapping for `verified`, JWT `token`, and `message`.
 - Unit test Passkey start/finish JSON mapping, including `allowCredentials` count and finish responses whose `user` omits `role`.
+- Unit test Passkey request JSON normalization for Credential Manager (challenge/rpId/allowCredentials) and discoverable empty allow list.
+- Passkey UI must invoke Credential Manager; manual assertion JSON paste is fallback-only and must not be the primary path.
 - ViewModel/UI test coverage should assert that multi-account QR confirmation opens an account picker, selecting an account switches the active account, and no JWT/`clientLoginToken`/`scanToken` value is rendered in the picker.
 - Do not add `androidTestImplementation` dependencies until real instrumentation tests exist. Unused AndroidX Test/Espresso dependencies still participate in `generateDebugAndroidTestLintModel` and can conflict with dependency lock constraints.
 - CameraX `ImageProxy.image` usage must be explicitly marked with AndroidX annotation opt-in, for example `@androidx.annotation.OptIn(markerClass = [ExperimentalGetImage::class])`; Kotlin's standard `@OptIn(ExperimentalGetImage::class)` does not satisfy AndroidX lint. Do not hide this lint error with a baseline.

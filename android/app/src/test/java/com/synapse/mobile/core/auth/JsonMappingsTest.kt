@@ -140,4 +140,26 @@ class JsonMappingsTest {
         assertEquals("jwt-value", result.token)
         assertEquals("验证成功", result.message)
     }
+
+    @Test
+    fun discoverablePasskeyStartMapsChallengeAndMode() {
+        val result = JSONObject(
+            """
+            {
+              "options": {
+                "challenge": "discoverable-challenge",
+                "rpId": "tts.chloemlla.com",
+                "userVerification": "required"
+              },
+              "challenge": "discoverable-challenge"
+            }
+            """.trimIndent(),
+        ).toPasskeyAuthenticationStartResult(discoverable = true)
+
+        assertTrue(result.discoverable)
+        assertTrue(result.options.discoverable)
+        assertEquals("discoverable-challenge", result.challenge)
+        assertTrue(result.options.hasChallenge)
+        assertEquals(0, result.options.allowCredentialCount)
+    }
 }
