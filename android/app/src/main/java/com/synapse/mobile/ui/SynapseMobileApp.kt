@@ -70,7 +70,8 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.remember
+
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -535,12 +536,25 @@ private fun LoginPanel(
                 ),
             )
             if (challenge.methods.any { it.equals("Passkey", ignoreCase = true) }) {
-                OutlinedButton(
+                val context = LocalContext.current
+                val activity = remember(context) { context.findActivity() }
+                val passkeyClient = remember(context) { SynapsePasskeyCredentialClient(context) }
+                Button(
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !state.loading,
-                    onClick = viewModel::startPasskeyAuthentication,
+                    enabled = !state.loading && activity != null,
+                    onClick = {
+                        val host = activity ?: return@Button
+                        viewModel.startPasskeyAuthentication(host, passkeyClient)
+                    },
                 ) {
-                    ButtonLabel(Icons.Outlined.Key, "获取本客户端 Passkey 认证选项")
+                    ButtonLabel(Icons.Outlined.Key, "使用通行密钥验证")
+                }
+                if (activity == null) {
+                    Text(
+                        text = "当前界面无法获取 Activity，暂不能唤起 Credential Manager。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             }
             if (challenge.methods.any { it.equals("TOTP", ignoreCase = true) }) {
@@ -576,44 +590,40 @@ private fun LoginPanel(
             }
         }
         state.passkeyOptions?.let { options ->
-            val context = LocalContext.current
-            val activity = remember(context) { context.findActivity() }
-            val passkeyClient = remember(context) { SynapsePasskeyCredentialClient(context) }
             InfoCard(
-                title = if (options.discoverable) "Discoverable Passkey 认证选项" else "Passkey 认证选项",
+                title = if (options.discoverable) "Discoverable Passkey" else "Passkey 验证中",
                 icon = Icons.Outlined.Key,
                 lines = options.summaryLines + listOf(
-                    "将调用系统 Credential Manager 完成通行密钥验证。",
+                    "系统通行密钥界面应已自动弹出；若未弹出可点下方按钮重试。",
                     "不会在界面展示 challenge 或 credential id 原文。",
                 ),
             )
-            Button(
+            val context = LocalContext.current
+            val activity = remember(context) { context.findActivity() }
+            val passkeyClient = remember(context) { SynapsePasskeyCredentialClient(context) }
+            OutlinedButton(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.loading && activity != null,
                 onClick = {
-                    val host = activity
-                    if (host == null) {
-                        return@Button
-                    }
+                    val host = activity ?: return@OutlinedButton
                     viewModel.authenticateWithPasskey(host, passkeyClient)
                 },
             ) {
-                ButtonLabel(Icons.Outlined.Key, "使用系统通行密钥验证并登录")
-            }
-            if (activity == null) {
-                Text(
-                    text = "当前界面无法获取 Activity，暂不能唤起 Credential Manager。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
+                ButtonLabel(Icons.Outlined.Key, "重新唤起系统通行密钥")
             }
         }
         // Passwordless discoverable entry is available even without a prior password 2FA challenge.
         if (state.pendingTwoFactorChallenge == null) {
+            val context = LocalContext.current
+            val activity = remember(context) { context.findActivity() }
+            val passkeyClient = remember(context) { SynapsePasskeyCredentialClient(context) }
             OutlinedButton(
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !state.loading,
-                onClick = viewModel::startDiscoverablePasskeyAuthentication,
+                enabled = !state.loading && activity != null,
+                onClick = {
+                    val host = activity ?: return@OutlinedButton
+                    viewModel.startDiscoverablePasskeyAuthentication(host, passkeyClient)
+                },
             ) {
                 ButtonLabel(Icons.Outlined.Key, "使用通行密钥直接登录（无需密码）")
             }

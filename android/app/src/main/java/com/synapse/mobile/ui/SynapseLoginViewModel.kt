@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.synapse.mobile.core.auth.LoginOutcome
+import com.synapse.mobile.core.auth.PasskeyAuthenticationOptions
 import com.synapse.mobile.core.auth.SynapseAuthRepository
 import com.synapse.mobile.core.auth.SynapsePasskeyJson
 import com.synapse.mobile.core.auth.SynapsePasskeyCredentialClient
@@ -316,7 +317,10 @@ class SynapseLoginViewModel(
         }
     }
 
-    fun startPasskeyAuthentication() {
+    fun startPasskeyAuthentication(
+        activity: Activity,
+        passkeyClient: SynapsePasskeyCredentialClient,
+    ) {
         val current = state.value
         val challenge = current.pendingTwoFactorChallenge
         if (challenge == null || !challenge.methods.any { it.equals("Passkey", ignoreCase = true) }) {
@@ -329,30 +333,56 @@ class SynapseLoginViewModel(
             return
         }
         launchAction {
-            val result = repository.startPasskeyAuthentication(username)
+            val start = repository.startPasskeyAuthentication(username)
+            val options = start.options
+            val pendingChallenge = start.challenge ?: options.challenge
             mutableState.update {
                 it.copy(
-                    passkeyOptions = result.options,
-                    passkeyChallenge = result.challenge ?: result.options.challenge,
+                    passkeyOptions = options,
+                    passkeyChallenge = pendingChallenge,
                     passkeyAssertionJson = "",
+                    status = "正在唤起系统通行密钥…",
                 )
             }
-            "已获取本客户端 Passkey 认证选项，请继续使用系统通行密钥验证。"
+            completePasskeyAuthentication(
+                activity = activity,
+                passkeyClient = passkeyClient,
+                options = options,
+                pendingChallenge = pendingChallenge,
+                username = username,
+                discoverable = false,
+                deviceName = current.deviceName,
+            )
         }
     }
 
-    fun startDiscoverablePasskeyAuthentication() {
+    fun startDiscoverablePasskeyAuthentication(
+        activity: Activity,
+        passkeyClient: SynapsePasskeyCredentialClient,
+    ) {
+        val current = state.value
         launchAction {
-            val result = repository.startDiscoverablePasskeyAuthentication()
+            val start = repository.startDiscoverablePasskeyAuthentication()
+            val options = start.options
+            val pendingChallenge = start.challenge ?: options.challenge
             mutableState.update {
                 it.copy(
-                    passkeyOptions = result.options,
-                    passkeyChallenge = result.challenge ?: result.options.challenge,
+                    passkeyOptions = options,
+                    passkeyChallenge = pendingChallenge,
                     passkeyAssertionJson = "",
                     pendingTwoFactorChallenge = null,
+                    status = "正在唤起系统通行密钥…",
                 )
             }
-            "已获取 Discoverable Passkey 认证选项，请继续使用系统通行密钥验证。"
+            completePasskeyAuthentication(
+                activity = activity,
+                passkeyClient = passkeyClient,
+                options = options,
+                pendingChallenge = pendingChallenge,
+                username = current.username,
+                discoverable = true,
+                deviceName = current.deviceName,
+            )
         }
     }
 
@@ -374,39 +404,58 @@ class SynapseLoginViewModel(
             return
         }
         launchAction {
-            val assertion = passkeyClient.getAuthenticationAssertion(
+            completePasskeyAuthentication(
                 activity = activity,
-                optionsJson = options.rawJson,
+                passkeyClient = passkeyClient,
+                options = options,
+                pendingChallenge = current.passkeyChallenge ?: options.challenge,
+                username = username,
+                discoverable = isDiscoverable,
+                deviceName = current.deviceName,
             )
-            // Never keep full assertion payload in UI state; only finish with backend.
-            val result = if (isDiscoverable) {
-                repository.finishDiscoverablePasskeyAuthentication(
-                    assertionResponse = assertion,
-                    challenge = current.passkeyChallenge ?: options.challenge,
-                    deviceName = current.deviceName,
-                )
-            } else {
-                repository.finishPasskeyAuthentication(
-                    username = username,
-                    assertionResponse = assertion,
-                    deviceName = current.deviceName,
-                )
-            }
-            mutableState.update {
-                it.copy(
-                    password = "",
-                    pendingTwoFactorChallenge = null,
-                    passkeyOptions = null,
-                    passkeyChallenge = null,
-                    passkeyAssertionJson = "",
-                    totpCode = "",
-                    backupCode = "",
-                    selectedTab = SynapseTab.Session,
-                )
-            }
-            val name = result.user?.username?.takeIf { it.isNotBlank() } ?: username
-            "Passkey 验证成功，已登录本客户端并签发客户端登录令牌。当前账号：$name"
         }
+    }
+
+    private suspend fun completePasskeyAuthentication(
+        activity: Activity,
+        passkeyClient: SynapsePasskeyCredentialClient,
+        options: PasskeyAuthenticationOptions,
+        pendingChallenge: String?,
+        username: String,
+        discoverable: Boolean,
+        deviceName: String,
+    ): String {
+        val assertion = passkeyClient.getAuthenticationAssertion(
+            activity = activity,
+            optionsJson = options.rawJson,
+        )
+        val result = if (discoverable) {
+            repository.finishDiscoverablePasskeyAuthentication(
+                assertionResponse = assertion,
+                challenge = pendingChallenge,
+                deviceName = deviceName,
+            )
+        } else {
+            repository.finishPasskeyAuthentication(
+                username = username,
+                assertionResponse = assertion,
+                deviceName = deviceName,
+            )
+        }
+        mutableState.update {
+            it.copy(
+                password = "",
+                pendingTwoFactorChallenge = null,
+                passkeyOptions = null,
+                passkeyChallenge = null,
+                passkeyAssertionJson = "",
+                totpCode = "",
+                backupCode = "",
+                selectedTab = SynapseTab.Session,
+            )
+        }
+        val name = result.user?.username?.takeIf { it.isNotBlank() } ?: username
+        return "Passkey 验证成功，已登录本客户端并签发客户端登录令牌。当前账号：$name"
     }
 
     fun finishPasskeyAuthentication() {

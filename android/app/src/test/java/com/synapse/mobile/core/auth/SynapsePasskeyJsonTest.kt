@@ -45,7 +45,8 @@ class SynapsePasskeyJsonTest {
         val request = JSONObject(requestJson)
 
         assertEquals("discoverable-challenge", request.getString("challenge"))
-        assertEquals(0, request.getJSONArray("allowCredentials").length())
+        // Empty allow list must be omitted so Credential Manager can discover credentials.
+        assertFalse(request.has("allowCredentials"))
     }
 
     @Test

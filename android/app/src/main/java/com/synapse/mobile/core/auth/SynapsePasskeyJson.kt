@@ -39,10 +39,9 @@ object SynapsePasskeyJson {
 
         val allowCredentials = options.optJSONArray("allowCredentials")
         if (allowCredentials != null && allowCredentials.length() > 0) {
+            // Only include a non-empty allow list. An empty array can prevent providers
+            // from showing the Credential Manager UI for discoverable credentials.
             request.put("allowCredentials", normalizeAllowCredentials(allowCredentials))
-        } else {
-            // Discoverable / conditional UI style: empty allow list lets Credential Manager discover.
-            request.put("allowCredentials", JSONArray())
         }
 
         options.optJSONObject("extensions")?.let { request.put("extensions", it) }

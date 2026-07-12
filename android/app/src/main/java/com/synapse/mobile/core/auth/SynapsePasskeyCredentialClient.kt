@@ -28,11 +28,17 @@ class SynapsePasskeyCredentialClient(
     suspend fun getAuthenticationAssertion(
         activity: Activity,
         optionsJson: String,
-    ): JSONObject = withContext(Dispatchers.Main) {
+    ): JSONObject = withContext(Dispatchers.Main.immediate) {
+        require(!activity.isFinishing && !activity.isDestroyed) {
+            "Activity 不可用，无法唤起 Credential Manager。"
+        }
         val requestJson = SynapsePasskeyJson.toGetCredentialRequestJson(optionsJson)
-        val request = GetCredentialRequest(
-            listOf(GetPublicKeyCredentialOption(requestJson = requestJson)),
-        )
+        // preferImmediatelyAvailableCredentials=false so the system UI can still open
+        // when only hybrid / cloud passkeys are available.
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(GetPublicKeyCredentialOption(requestJson = requestJson))
+            .setPreferImmediatelyAvailableCredentials(false)
+            .build()
         try {
             val result = credentialManager.getCredential(
                 context = activity,
@@ -50,7 +56,7 @@ class SynapsePasskeyCredentialClient(
             throw IllegalStateException("已取消 Passkey 验证。", error)
         } catch (error: NoCredentialException) {
             throw IllegalStateException(
-                "未找到可用的 Passkey。请确认本机已保存该账号的通行密钥，且应用已完成 Digital Asset Links 关联。",
+                "未找到可用的 Passkey。请确认：1) 本机或同一 Google 账号已保存该站通行密钥；2) 应用已与 RP 域名完成 Digital Asset Links 关联；3) 设备支持通行密钥。",
                 error,
             )
         } catch (error: GetCredentialException) {
@@ -64,8 +70,12 @@ class SynapsePasskeyCredentialClient(
         return when {
             type.contains("CANCELED", ignoreCase = true) -> "已取消 Passkey 验证。"
             type.contains("NO_CREDENTIAL", ignoreCase = true) ->
-                "未找到可用的 Passkey。请确认本机已保存该账号的通行密钥。"
+                "未找到可用的 Passkey。请确认本机已保存该账号的通行密钥，且已完成 Digital Asset Links 关联。"
             type.contains("INTERRUPTED", ignoreCase = true) -> "Passkey 验证被中断，请重试。"
+            type.contains("PROVIDER_CONFIGURATION", ignoreCase = true) ->
+                "通行密钥提供方未就绪。请安装/更新 Google Play 服务，并确认设备支持 Credential Manager。"
+            type.contains("UNSUPPORTED", ignoreCase = true) ->
+                "当前设备或系统不支持通行密钥 Credential Manager。"
             !message.isNullOrBlank() -> "Passkey 验证失败：$message"
             else -> "Passkey 验证失败：${error::class.java.simpleName}"
         }
