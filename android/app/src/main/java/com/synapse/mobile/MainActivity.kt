@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity() {
         }
 
         if (::viewModel.isInitialized) {
-            intent.dataString?.let(viewModel::acceptScannedPayload)
+            intent.dataString?.let(viewModel::handleIncomingUri)
         }
 
         setContent {
@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
         CrashBreadcrumbs.record("MainActivity.onNewIntent")
         setIntent(intent)
         if (::viewModel.isInitialized) {
-            intent.dataString?.let(viewModel::acceptScannedPayload)
+            intent.dataString?.let(viewModel::handleIncomingUri)
         }
     }
 

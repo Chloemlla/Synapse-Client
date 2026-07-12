@@ -115,6 +115,41 @@ internal fun JSONObject.toPasskeyAuthenticationFinishResult(): PasskeyAuthentica
 }
 
 
+
+internal fun JSONObject.toLinuxDoAuthConfig(): LinuxDoAuthConfig {
+    val data = optJSONObject("data")
+    val clientIdConfigured = optBoolean(
+        "clientIdConfigured",
+        data?.optBoolean("clientIdConfigured", false) == true,
+    )
+    val enabled = optBoolean(
+        "enabled",
+        data?.optBoolean("enabled", clientIdConfigured) == true,
+    )
+    return LinuxDoAuthConfig(
+        enabled = enabled,
+        clientIdConfigured = clientIdConfigured,
+        callbackUrl = firstString("callbackUrl") ?: data?.firstString("callbackUrl"),
+        frontendCallbackUrl = firstString("frontendCallbackUrl") ?: data?.firstString("frontendCallbackUrl"),
+        discoveryUrl = firstString("discoveryUrl") ?: data?.firstString("discoveryUrl"),
+        scopes = firstString("scopes") ?: data?.firstString("scopes"),
+    )
+}
+
+internal fun JSONObject.toLinuxDoLoginResult(): LinuxDoLoginResult {
+    val data = optJSONObject("data")
+    val userJson = optJSONObject("user") ?: data?.optJSONObject("user")
+        ?: throw IllegalStateException("Linux.do 登录响应缺少用户信息。")
+    val token = firstString("token") ?: data?.firstString("token")
+        ?: throw IllegalStateException("Linux.do 登录响应缺少 JWT。")
+    return LinuxDoLoginResult(
+        token = token,
+        user = userJson.toSynapseUser(),
+        isNewUser = optBoolean("isNewUser", data?.optBoolean("isNewUser", false) == true),
+        provider = firstString("provider") ?: data?.firstString("provider") ?: "linuxdo",
+    )
+}
+
 internal fun JSONObject.toGoogleAuthConfig(): GoogleAuthConfig {
     val data = optJSONObject("data")
     val clientId = (firstString("clientId") ?: data?.firstString("clientId"))

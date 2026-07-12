@@ -26,6 +26,18 @@ class SynapseMobileLoginApi(
         ) { it.toStandardLoginResult() }
 
 
+
+    suspend fun getLinuxDoAuthConfig(): LinuxDoAuthConfig =
+        get(
+            path = "/api/auth/linuxdo/config",
+        ) { it.toLinuxDoAuthConfig() }
+
+    suspend fun exchangeLinuxDoTicket(ticket: String): LinuxDoLoginResult =
+        post(
+            path = "/api/auth/linuxdo/exchange",
+            body = JSONObject().put("ticket", ticket),
+        ) { it.toLinuxDoLoginResult() }
+
     suspend fun getGoogleAuthConfig(): GoogleAuthConfig =
         get(
             path = "/api/auth/google/config",

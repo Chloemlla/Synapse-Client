@@ -239,4 +239,48 @@ class JsonMappingsTest {
         assertEquals("bind-session-token", binding.session.sessionToken)
         assertEquals("google", binding.session.provider)
     }
+@Test
+    fun linuxDoAuthConfigMapsSummary() {
+        val result = JSONObject(
+            """
+            {
+              "enabled": true,
+              "clientIdConfigured": true,
+              "callbackUrl": "https://tts.chloemlla.com/api/auth/linuxdo/callback",
+              "frontendCallbackUrl": "https://tts.chloemlla.com/auth/linuxdo/callback",
+              "discoveryUrl": "https://connect.linux.do/.well-known/openid-configuration",
+              "scopes": "openid profile email"
+            }
+            """.trimIndent(),
+        ).toLinuxDoAuthConfig()
+
+        assertTrue(result.enabled)
+        assertTrue(result.canSignIn)
+        assertEquals("https://tts.chloemlla.com/api/auth/linuxdo/callback", result.callbackUrl)
+        assertEquals("openid profile email", result.scopes)
+    }
+
+    @Test
+    fun linuxDoExchangeMapsTokenAndUser() {
+        val result = JSONObject(
+            """
+            {
+              "token": "jwt-linuxdo",
+              "user": {
+                "id": "u1",
+                "username": "ld_user",
+                "email": "ld@example.com",
+                "role": "user"
+              },
+              "isNewUser": false,
+              "provider": "linuxdo"
+            }
+            """.trimIndent(),
+        ).toLinuxDoLoginResult()
+
+        assertEquals("jwt-linuxdo", result.token)
+        assertEquals("ld_user", result.user.username)
+        assertEquals("linuxdo", result.provider)
+        assertFalse(result.isNewUser)
+    }
 }

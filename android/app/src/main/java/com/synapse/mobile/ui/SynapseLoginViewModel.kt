@@ -11,6 +11,8 @@ import com.synapse.mobile.core.auth.SynapseAuthRepository
 import com.synapse.mobile.core.auth.SynapsePasskeyJson
 import com.synapse.mobile.core.auth.SynapsePasskeyCredentialClient
 import com.synapse.mobile.core.auth.SynapseGoogleCredentialClient
+import com.synapse.mobile.core.auth.SynapseLinuxDoCallbackParser
+import com.synapse.mobile.core.auth.LinuxDoAuthConfig
 import com.synapse.mobile.core.auth.SynapseQrPayload
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +44,7 @@ class SynapseLoginViewModel(
         }
         loadTurnstileConfig()
         loadGoogleAuthConfig()
+        loadLinuxDoAuthConfig()
     }
 
     fun selectTab(tab: SynapseTab) {
@@ -548,6 +551,149 @@ class SynapseLoginViewModel(
         }
     }
 
+
+
+    fun loadLinuxDoAuthConfig() {
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(
+                    linuxDoAuthConfigLoading = true,
+                    linuxDoAuthConfigError = null,
+                )
+            }
+            runCatching { repository.getLinuxDoAuthConfig() }
+                .onSuccess { config ->
+                    mutableState.update {
+                        it.copy(
+                            linuxDoAuthConfig = config,
+                            linuxDoAuthConfigLoading = false,
+                            linuxDoAuthConfigError = null,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(
+                            linuxDoAuthConfig = LinuxDoAuthConfig(
+                                enabled = false,
+                                clientIdConfigured = false,
+                                callbackUrl = null,
+                                frontendCallbackUrl = null,
+                                discoveryUrl = null,
+                                scopes = null,
+                            ),
+                            linuxDoAuthConfigLoading = false,
+                            linuxDoAuthConfigError = error.message ?: error::class.java.simpleName,
+                        )
+                    }
+                }
+        }
+    }
+
+    fun linuxDoStartUrl(intent: String = "login"): String = repository.linuxDoStartUrl(intent)
+
+    fun reportLinuxDoBrowserOpenFailed(message: String) {
+        mutableState.update {
+            it.copy(
+                error = message.ifBlank { "无法打开浏览器进行 Linux.do 授权。" },
+                status = "",
+            )
+        }
+    }
+
+    fun markLinuxDoBrowserOpened() {
+        mutableState.update {
+            it.copy(
+                linuxDoBrowserOpened = true,
+                selectedTab = SynapseTab.Login,
+                status = "已打开 Linux.do 授权页。完成授权后请回到本应用；若系统未自动回调，可粘贴回调链接或登录票据。",
+                error = null,
+            )
+        }
+    }
+
+    fun handleIncomingUri(raw: String) {
+        val trimmed = raw.trim()
+        if (trimmed.isBlank()) return
+        if (SynapseLinuxDoCallbackParser.isLinuxDoRelated(trimmed)) {
+            completeLinuxDoFromCallback(trimmed)
+            return
+        }
+        acceptScannedPayload(trimmed)
+    }
+
+    fun completeLinuxDoFromCallback(raw: String) {
+        val payload = try {
+            SynapseLinuxDoCallbackParser.parse(raw)
+        } catch (error: Exception) {
+            mutableState.update {
+                it.copy(
+                    selectedTab = SynapseTab.Login,
+                    error = error.message ?: "无法解析 Linux.do 回调。",
+                )
+            }
+            return
+        }
+
+        if (!payload.error.isNullOrBlank()) {
+            mutableState.update {
+                it.copy(
+                    selectedTab = SynapseTab.Login,
+                    linuxDoBrowserOpened = false,
+                    error = "Linux.do 授权失败：${payload.error}",
+                    status = "",
+                )
+            }
+            return
+        }
+
+        if (payload.isBindFlow) {
+            mutableState.update {
+                it.copy(
+                    selectedTab = SynapseTab.Login,
+                    linuxDoBrowserOpened = false,
+                    error = "该 Linux.do 账号尚未绑定本地账号。请先在网页端完成绑定后再使用 App 登录。",
+                    status = "",
+                )
+            }
+            return
+        }
+
+        val ticket = payload.ticket
+        if (ticket.isNullOrBlank()) {
+            mutableState.update {
+                it.copy(
+                    selectedTab = SynapseTab.Login,
+                    error = "Linux.do 回调缺少登录票据 ticket。",
+                )
+            }
+            return
+        }
+
+        exchangeLinuxDoTicket(ticket)
+    }
+
+    fun exchangeLinuxDoTicket(ticket: String) {
+        launchAction {
+            val outcome = repository.signInWithLinuxDoTicket(
+                ticket = ticket,
+                deviceName = mutableState.value.deviceName,
+            )
+            mutableState.update {
+                it.copy(
+                    credentials = repository.credentials(),
+                    pendingTwoFactorChallenge = null,
+                    passkeyOptions = null,
+                    passkeyChallenge = null,
+                    passkeyAssertionJson = "",
+                    password = "",
+                    linuxDoBrowserOpened = false,
+                )
+            }
+            val name = outcome.user?.username ?: outcome.user?.email ?: "当前账号"
+            "Linux.do 登录成功，已登录本客户端并签发客户端登录令牌。当前账号：$name"
+        }
+    }
 
     fun loadGoogleAuthConfig() {
         viewModelScope.launch {

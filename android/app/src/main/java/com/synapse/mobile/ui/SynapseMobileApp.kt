@@ -4,6 +4,8 @@ import com.synapse.mobile.core.auth.SynapsePasskeyCredentialClient
 import com.synapse.mobile.core.auth.SynapseGoogleCredentialClient
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.content.ClipData
 import android.content.Context
 import android.content.ContextWrapper
@@ -675,6 +677,91 @@ private fun LoginPanel(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+
+        if (state.linuxDoAuthConfig.canSignIn || state.linuxDoAuthConfigLoading || state.linuxDoAuthConfigError != null) {
+            SectionTitle(
+                text = "使用 Linux.do 登录",
+                subtitle = "浏览器完成 OAuth 授权后，用 ticket 换取 JWT 并签发本机 SML 令牌。",
+            )
+            if (state.linuxDoAuthConfigLoading) {
+                Text(
+                    text = "正在检查 Linux.do 登录配置…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else if (state.linuxDoAuthConfigError != null) {
+                InfoCard(
+                    icon = Icons.Outlined.WarningAmber,
+                    title = "Linux.do 登录配置不可用",
+                    lines = listOf(
+                        state.linuxDoAuthConfigError ?: "无法加载 Linux.do 登录配置。",
+                        "可稍后重试，或继续使用密码 / Google / 通行密钥登录。",
+                    ),
+                )
+                OutlinedButton(
+                    onClick = viewModel::loadLinuxDoAuthConfig,
+                    enabled = !state.loading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    ButtonLabel(Icons.Outlined.Security, "重新加载 Linux.do 登录配置")
+                }
+            } else if (state.linuxDoAuthConfig.canSignIn) {
+                val context = LocalContext.current
+                Button(
+                    onClick = {
+                        val url = viewModel.linuxDoStartUrl("login")
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                            viewModel.markLinuxDoBrowserOpened()
+                        }.onFailure { error ->
+                            viewModel.reportLinuxDoBrowserOpenFailed(
+                                error.message ?: "无法打开浏览器进行 Linux.do 授权。",
+                            )
+                        }
+                    },
+                    enabled = !state.loading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    ButtonLabel(Icons.Outlined.AccountCircle, "使用 Linux.do 登录")
+                }
+                Text(
+                    text = "将打开系统浏览器访问 Happy-TTS /api/auth/linuxdo/start。授权成功后若自动回到应用会尝试交换票据；否则请从回调页复制链接或 ticket。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (state.linuxDoBrowserOpened) {
+                    var linuxDoCallbackInput by rememberSaveable { mutableStateOf("") }
+                    OutlinedTextField(
+                        value = linuxDoCallbackInput,
+                        onValueChange = { linuxDoCallbackInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = false,
+                        minLines = 2,
+                        label = { Text("Linux.do 回调链接或 ticket") },
+                        supportingText = {
+                            Text("可粘贴完整回调 URL（含 ticket=）或仅粘贴 ticket 字符串。")
+                        },
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            val raw = linuxDoCallbackInput.trim()
+                            if (raw.isBlank()) return@OutlinedButton
+                            if (raw.contains("://") || raw.contains("ticket=")) {
+                                viewModel.completeLinuxDoFromCallback(raw)
+                            } else {
+                                viewModel.exchangeLinuxDoTicket(raw)
+                            }
+                        },
+                        enabled = !state.loading && linuxDoCallbackInput.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        ButtonLabel(Icons.Outlined.Key, "提交 Linux.do 登录票据")
+                    }
+                }
             }
         }
 
@@ -1489,3 +1576,4 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is ContextWrapper -> baseContext.findActivity()
     else -> null
 }
+

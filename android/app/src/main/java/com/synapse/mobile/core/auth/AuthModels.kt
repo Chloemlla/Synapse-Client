@@ -161,6 +161,39 @@ data class SynapseQrPayload(
 }
 
 
+
+data class LinuxDoAuthConfig(
+    val enabled: Boolean,
+    val clientIdConfigured: Boolean,
+    val callbackUrl: String?,
+    val frontendCallbackUrl: String?,
+    val discoveryUrl: String?,
+    val scopes: String?,
+) {
+    val canSignIn: Boolean = enabled && clientIdConfigured
+}
+
+data class LinuxDoLoginResult(
+    val token: String,
+    val user: SynapseUser,
+    val isNewUser: Boolean,
+    val provider: String,
+)
+
+data class LinuxDoCallbackPayload(
+    val ticket: String? = null,
+    val intent: String? = null,
+    val error: String? = null,
+    val sessionToken: String? = null,
+    val bindStatus: String? = null,
+    val mergeToken: String? = null,
+) {
+    val isBindFlow: Boolean =
+        !sessionToken.isNullOrBlank() ||
+            intent.equals("bind", ignoreCase = true) ||
+            !bindStatus.isNullOrBlank()
+}
+
 data class GoogleAuthConfig(
     val enabled: Boolean,
     val clientIdConfigured: Boolean,

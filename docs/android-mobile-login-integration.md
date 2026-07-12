@@ -354,6 +354,66 @@ synapse://mobile-login?sessionId=<sessionId>&scanToken=<scanToken>&apiBaseUrl=<a
 }
 ```
 
+### Linux.do 登录（浏览器 OAuth + ticket）
+
+安卓端对接 Happy-TTS Linux.do OAuth，流程与网页端一致，不在 App 内嵌入 client secret。
+
+推荐流程：
+
+1. 调用 `GET /api/auth/linuxdo/config` 判断是否启用。
+2. 用系统浏览器打开 `GET /api/auth/linuxdo/start?intent=login`（服务端完成 PKCE 并跳转 connect.linux.do）。
+3. 授权后服务端回调 `POST/GET /api/auth/linuxdo/callback`，成功时重定向到前端回调页并附带一次性 `ticket`。
+4. 已绑定账号：App 解析回调 URL 中的 `ticket`，调用 `POST /api/auth/linuxdo/exchange` 换取 JWT。
+5. 未绑定账号：重定向到 `/auth/provider/bind?sessionToken=...`。移动端暂不实现网页绑定 UI，应提示用户先在网页完成绑定。
+6. 收到正式 JWT 后加密保存，并立即调用 `/api/auth/mobile-login/client-token/issue`。
+
+可选深链（便于手动回调）：`synapse://linuxdo-callback?ticket=...`。
+
+### Linux.do 配置
+
+`GET /api/auth/linuxdo/config`
+
+响应：
+
+```json
+{
+  "enabled": true,
+  "clientIdConfigured": true,
+  "callbackUrl": "https://tts.chloemlla.com/api/auth/linuxdo/callback",
+  "frontendCallbackUrl": "https://tts.chloemlla.com/auth/linuxdo/callback",
+  "discoveryUrl": "https://connect.linux.do/.well-known/openid-configuration",
+  "scopes": "openid profile email"
+}
+```
+
+### Linux.do 交换登录票据
+
+`POST /api/auth/linuxdo/exchange`
+
+请求：
+
+```json
+{
+  "ticket": "one-time-login-ticket"
+}
+```
+
+响应：
+
+```json
+{
+  "token": "jwt",
+  "user": {
+    "id": "string",
+    "username": "string",
+    "email": "string",
+    "role": "user"
+  },
+  "isNewUser": false,
+  "provider": "linuxdo"
+}
+```
+
 ### Web 创建扫码挑战
 
 `POST /api/auth/mobile-login/challenge`

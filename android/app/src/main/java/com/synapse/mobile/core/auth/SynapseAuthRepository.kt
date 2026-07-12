@@ -1,5 +1,6 @@
 package com.synapse.mobile.core.auth
 
+import android.net.Uri
 import android.content.Context
 import android.os.Build
 import org.json.JSONObject
@@ -37,6 +38,43 @@ class SynapseAuthRepository(
 
     suspend fun getGoogleAuthConfig(): GoogleAuthConfig =
         apiFor(trustedApiOrigin).getGoogleAuthConfig()
+
+    suspend fun getLinuxDoAuthConfig(): LinuxDoAuthConfig =
+        apiFor(trustedApiOrigin).getLinuxDoAuthConfig()
+
+    /**
+     * Happy-TTS Linux.do OAuth start URL (server issues PKCE + redirects to connect.linux.do).
+     */
+    fun linuxDoStartUrl(intent: String = "login"): String {
+        val cleanIntent = intent.trim().ifBlank { "login" }
+        return "${trustedApiOrigin.trimEnd('/')}/api/auth/linuxdo/start?intent=${Uri.encode(cleanIntent)}"
+    }
+
+    suspend fun signInWithLinuxDoTicket(
+        ticket: String,
+        deviceName: String,
+    ): LoginOutcome.Authenticated {
+        val cleanTicket = ticket.trim()
+        require(cleanTicket.isNotBlank()) { "缺少 Linux.do 登录票据。" }
+
+        val api = apiFor(trustedApiOrigin)
+        val login = api.exchangeLinuxDoTicket(cleanTicket)
+        require(login.token.isNotBlank()) { "Linux.do 登录响应未包含 JWT。" }
+        credentialStore.saveJwt(login.token, login.user)
+
+        val issued = api.issueClientToken(
+            jwt = login.token,
+            deviceId = deviceId.getOrCreate(),
+            deviceName = deviceName.ifBlank { defaultDeviceName() },
+        )
+        credentialStore.saveClientLoginToken(issued.clientLoginToken, issued.expiresAt)
+
+        return LoginOutcome.Authenticated(
+            user = login.user,
+            clientTokenExpiresAt = issued.expiresAt,
+        )
+    }
+
 
     /**
      * Completes Happy-TTS Google Sign-In with an ID token from Credential Manager.
