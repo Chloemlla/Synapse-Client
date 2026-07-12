@@ -46,4 +46,18 @@ class SynapseLinuxDoCallbackParserTest {
         )
         assertEquals("access_denied", payload.error)
     }
+
+    @Test
+    fun isLinuxDoRelatedRejectsUnrelatedHttps() {
+        assertFalse(
+            SynapseLinuxDoCallbackParser.isLinuxDoRelated(
+                "https://tts.chloemlla.com/login",
+            ),
+        )
+        assertTrue(
+            SynapseLinuxDoCallbackParser.isLinuxDoRelated(
+                "https://tts.chloemlla.com/auth/linuxdo/callback?ticket=x",
+            ),
+        )
+    }
 }

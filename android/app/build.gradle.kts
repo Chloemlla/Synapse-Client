@@ -42,11 +42,18 @@ android {
             ?.takeIf { it.isNotBlank() }
             ?: "1.0.0"
 
+        val synapseApiBaseUrl = providerString("SYNAPSE_API_BASE_URL", "https://tts.chloemlla.com")
+        val synapseApiHost = runCatching {
+            java.net.URI(synapseApiBaseUrl).host
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: "tts.chloemlla.com"
+
         buildConfigField(
             "String",
             "SYNAPSE_API_BASE_URL",
-            "\"${buildConfigString(providerString("SYNAPSE_API_BASE_URL", "https://tts.chloemlla.com"))}\"",
+            "\"${buildConfigString(synapseApiBaseUrl)}\"",
         )
+        // Used by Android App Links for Linux.do / provider-bind HTTPS callbacks.
+        manifestPlaceholders["synapseApiHost"] = synapseApiHost
     }
 
     buildFeatures {

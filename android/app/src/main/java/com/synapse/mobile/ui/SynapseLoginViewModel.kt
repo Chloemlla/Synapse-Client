@@ -606,7 +606,7 @@ class SynapseLoginViewModel(
             it.copy(
                 linuxDoBrowserOpened = true,
                 selectedTab = SynapseTab.Login,
-                status = "已打开 Linux.do 授权页。完成授权后请回到本应用；若系统未自动回调，可粘贴回调链接或登录票据。",
+                status = "已打开 Linux.do 授权页。授权完成后应通过 App Links 自动回到本应用；若未自动返回，可粘贴回调链接或 ticket。",
                 error = null,
             )
         }

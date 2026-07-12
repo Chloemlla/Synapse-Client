@@ -729,7 +729,7 @@ private fun LoginPanel(
                     ButtonLabel(Icons.Outlined.AccountCircle, "使用 Linux.do 登录")
                 }
                 Text(
-                    text = "将打开系统浏览器访问 Happy-TTS /api/auth/linuxdo/start。授权成功后若自动回到应用会尝试交换票据；否则请从回调页复制链接或 ticket。",
+                    text = "将打开系统浏览器访问 Happy-TTS /api/auth/linuxdo/start。授权完成后，若站点已配置 Digital Asset Links，会经 App Links 自动回到本应用并交换 ticket；否则请粘贴回调链接或 ticket。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

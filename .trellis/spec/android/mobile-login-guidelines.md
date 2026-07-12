@@ -291,4 +291,9 @@ credentialStore.saveClientLoginToken(clientLoginToken, expiresAt)
 - If callback is provider-bind (`sessionToken` / `/auth/provider/bind`), tell user to finish binding on web; do not invent a mobile bind UI unless product asks.
 - Optional deep link: `synapse://linuxdo-callback?ticket=...`.
 - Never log full ticket, JWT, or SML token.
+### Linux.do App Links auto-return
 
+- Declare verified HTTPS intent-filters for `/auth/linuxdo/callback` and `/auth/provider/bind` on the trusted API host (`manifestPlaceholders.synapseApiHost`).
+- Host Digital Asset Links at `https://{api-host}/.well-known/assetlinks.json` with package `com.synapse.mobile` and release cert SHA-256.
+- Keep `synapse://linuxdo-callback` as manual fallback; keep paste-ticket UI when browser does not return.
+- Do not claim automatic return works until assetlinks is published and the release-signed APK is installed.

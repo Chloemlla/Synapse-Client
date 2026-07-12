@@ -367,7 +367,29 @@ synapse://mobile-login?sessionId=<sessionId>&scanToken=<scanToken>&apiBaseUrl=<a
 5. 未绑定账号：重定向到 `/auth/provider/bind?sessionToken=...`。移动端暂不实现网页绑定 UI，应提示用户先在网页完成绑定。
 6. 收到正式 JWT 后加密保存，并立即调用 `/api/auth/mobile-login/client-token/issue`。
 
-可选深链（便于手动回调）：`synapse://linuxdo-callback?ticket=...`。
+### Linux.do 自动回 App（Android App Links）
+
+为了授权完成后**自动回到 App**（无需粘贴 ticket），需要同时满足：
+
+1. **App 声明 HTTPS App Links**（本仓库已声明）：
+   - `https://{api-host}/auth/linuxdo/callback*`
+   - `https://{api-host}/auth/provider/bind*`
+   - `android:autoVerify="true"`
+   - `{api-host}` 来自 `SYNAPSE_API_BASE_URL`（默认 `tts.chloemlla.com`）
+2. **站点发布 Digital Asset Links**：
+   - URL：`https://{api-host}/.well-known/assetlinks.json`
+   - 必须包含包名 `com.synapse.mobile` 与 **发布签名证书 SHA-256**
+   - 示例文件：`docs/assetlinks.synapse-mobile.sample.json`
+3. 安装 **release 签名** APK（debug 签名 SHA-256 不同，需额外登记）
+4. 系统完成链接校验后，浏览器打开前端回调页时会优先拉起 App；`MainActivity` 解析 `ticket` 并调用 `POST /api/auth/linuxdo/exchange`
+
+可选自定义深链（手动/调试）：`synapse://linuxdo-callback?ticket=...`。
+
+**注意**：仅改 App 不能生效；`assetlinks.json` 必须由 Happy-TTS / CDN 在 API 同源主机上可公开访问。校验可用：
+
+```text
+https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://tts.chloemlla.com&relation=delegate_permission/common.handle_all_urls
+```
 
 ### Linux.do 配置
 
