@@ -40,7 +40,7 @@ class SynapseMobileLoginApi(
 
     suspend fun getGoogleAuthConfig(): GoogleAuthConfig =
         get(
-            path = "/api/auth/google/config",
+            path = "/api/auth/google/config?client=synapse-android",
         ) { it.toGoogleAuthConfig() }
 
     /**

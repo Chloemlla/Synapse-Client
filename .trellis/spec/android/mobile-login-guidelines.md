@@ -275,12 +275,28 @@ credentialStore.saveClientLoginToken(clientLoginToken, expiresAt)
 
 ### Google Sign-In (Credential Manager SIWG)
 
-- Load `GET /api/auth/google/config` for `enabled` + Web `clientId` (`serverClientId`).
+- Load `GET /api/auth/google/config?client=synapse-android` for `enabled` + Web `clientId` (`serverClientId`).
+- Happy-TTS resolves the Android-specific runtime/env value `SYNAPSE_ANDROID_GOOGLE_CLIENT_ID` first and falls back to the main `GOOGLE_CLIENT_ID`; the unqualified web config endpoint must keep returning the main-site Client ID.
+- Happy-TTS Google ID-token verification must accept every configured trusted audience (main web + Synapse Android) so a dedicated Android Web Client ID does not break the existing web GSI flow.
 - Use `CredentialManager` + `GetGoogleIdOption` / `GetSignInWithGoogleOption` to obtain a Google ID token.
 - Exchange via Happy-TTS: prefer `POST /api/auth/google/bind-session`; if `requiresBinding=true`, fall back to `POST /api/auth/google` (mobile has no web bind UI).
 - On JWT success: encrypt JWT, then `POST /api/auth/mobile-login/client-token/issue`.
 - Never log or display full Google idToken, JWT, or SML token.
 - Dependencies: `androidx.credentials:credentials`, `credentials-play-services-auth`, `com.google.android.libraries.identity.googleid:googleid`.
+
+Validation: if both Android-specific and main Client IDs are empty, treat Google login as disabled. A configured Android-specific ID must not replace the main Client ID returned to the Happy-TTS web frontend.
+
+Good: Android requests the qualified config endpoint, receives its dedicated Web Client ID, and the backend verifies the ID token against both trusted audiences.
+
+Base: Android-specific Client ID is empty, so the qualified endpoint returns the main Web Client ID.
+
+Bad: Android calls the unqualified web endpoint while expecting a dedicated ID, or the backend verifies only the main audience after issuing Android credentials with a separate Web Client ID.
+
+Tests: statically assert the Android API path includes `client=synapse-android`; backend contract tests must assert qualified config override/fallback and multi-audience ID-token verification while preserving the unqualified web response.
+
+Wrong: `GET /api/auth/google/config` for Android plus single-audience verification.
+
+Correct: `GET /api/auth/google/config?client=synapse-android` plus verification against the unique non-empty main and Android Web Client IDs.
 
 ### Linux.do OAuth (browser + ticket)
 
