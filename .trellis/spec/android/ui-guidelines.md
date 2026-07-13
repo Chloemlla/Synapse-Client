@@ -44,6 +44,7 @@ StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active
 - Buttons that perform clear actions should include an icon and short label via the local button-label pattern.
 - Authentication, QR, session, scanner, and destructive-action states must use semantic icons and colors.
 - Do not render full JWT, `clientLoginToken`, `scanToken`, Turnstile token, or password values. UI may show a token preview and may copy the full SML token only through an explicit copy action.
+- Crash reports are shareable diagnostics: sanitize local paths, content/file URIs, bearer credentials, token/password query parameters, and common API-key formats in root causes, stack traces, fallback reports, and recent-event breadcrumbs before persistence or display.
 - Keep panels constrained for larger screens and scrollable for mobile screens; text must use `maxLines` and `TextOverflow.Ellipsis` where long account/device/token values appear.
 - Large summary/status regions must live inside the tab's scrollable content and switch to a compact form on low-height layouts such as landscape, so users can always scroll past them to the form/actions below.
 - Do not add visible instructional text about internal design choices, keyboard shortcuts, or implementation details.
@@ -62,6 +63,7 @@ StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active
 | New information/status card | Use tonal surface, consistent radius, and semantic icon. |
 | New destructive action | Require a confirmation dialog with warning icon and explicit confirm text. |
 | New credential/token display | Show availability or preview only; never render the full secret value. |
+| Crash report or breadcrumb content | Apply the shared crash-report sanitizer before persistence, rendering, copying, or sharing; fallback report construction must use the same sanitizer. |
 | Long account, device, URL, or token-adjacent text | Cap lines and use ellipsis. |
 | Landscape or low-height screen | Keep header/status content scrollable and compact; do not pin a large banner above the scroll area. |
 | New scanner/permission UI | Keep the permission rationale visible before launching permission request. |
@@ -83,6 +85,7 @@ Bad: a naked text-only button in a dense form, a raw `clientLoginToken` rendered
 
 - GitHub Actions must run Android unit tests, lint, and release assemble for Android UI changes.
 - Static review must confirm no raw JWT, `clientLoginToken`, `scanToken`, Turnstile token, or password value is rendered or logged.
+- Unit tests must cover crash-report redaction for local paths, content/file URIs, bearer credentials, token/password query parameters, and supported API-key formats.
 - Static review must confirm new destructive actions have confirmation.
 - For ViewModel-driven behavior changes, add/update unit tests for pure state or parser behavior where feasible.
 

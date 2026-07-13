@@ -46,9 +46,11 @@ data class CrashReport(
         fun fromThrowable(throwable: Throwable): CrashReport {
             val root = throwable.rootCause()
             val nowMillis = System.currentTimeMillis()
-            val stackTrace = sanitize(throwable.stackTraceText())
+            val stackTrace = CrashReportSanitizer.sanitize(throwable.stackTraceText())
             val exceptionType = throwable::class.java.name
-            val rootCause = sanitize(root.message?.takeIf { it.isNotBlank() } ?: root::class.java.name)
+            val rootCause = CrashReportSanitizer.sanitize(
+                root.message?.takeIf { it.isNotBlank() } ?: root::class.java.name,
+            )
             return CrashReport(
                 reportId = reportId(nowMillis, exceptionType, rootCause, stackTrace),
                 crashedAtMillis = nowMillis,
@@ -65,9 +67,11 @@ data class CrashReport(
 
         fun fromThrowableFallback(throwable: Throwable, reportFailure: Throwable): CrashReport {
             val nowMillis = System.currentTimeMillis()
-            val stackTrace = throwable.stackTraceToString()
+            val stackTrace = CrashReportSanitizer.sanitize(throwable.stackTraceToString())
             val exceptionType = throwable::class.java.name
-            val rootCause = throwable.message?.takeIf { it.isNotBlank() } ?: throwable::class.java.name
+            val rootCause = CrashReportSanitizer.sanitize(
+                throwable.message?.takeIf { it.isNotBlank() } ?: throwable::class.java.name,
+            )
             return CrashReport(
                 reportId = reportId(nowMillis, exceptionType, rootCause, stackTrace),
                 crashedAtMillis = nowMillis,
@@ -133,15 +137,6 @@ data class CrashReport(
             val writer = StringWriter()
             printStackTrace(PrintWriter(writer))
             return writer.toString()
-        }
-
-        private fun sanitize(value: String): String {
-            return value
-                .replace(Regex("""[A-Za-z]:\\Users\\[^\\\s]+"""), "[user-home]")
-                .replace(Regex("""/home/[^/\s]+"""), "[user-home]")
-                .replace(Regex("""/Users/[^/\s]+"""), "[user-home]")
-                .replace(Regex("""content://[^\s]+"""), "[content-uri]")
-                .replace(Regex("""file://[^\s]+"""), "[file-uri]")
         }
 
         private const val BYTES_PER_MEBIBYTE = 1024L * 1024L
