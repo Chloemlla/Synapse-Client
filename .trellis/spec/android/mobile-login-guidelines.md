@@ -308,6 +308,11 @@ Correct: `GET /api/auth/google/config?client=synapse-android` plus verification 
 - If callback is provider-bind (`sessionToken` / `/auth/provider/bind`), tell user to finish binding on web; do not invent a mobile bind UI unless product asks.
 - Optional deep link: `synapse://linuxdo-callback?ticket=...`.
 - Never log full ticket, JWT, or SML token.
+
+`SynapseLinuxDoCallbackParser` must stay pure-JVM:
+- Use `java.net.URI` + query map decoding (`URLDecoder`), matching `SynapseQrPayloadParser`.
+- Do not call `android.net.Uri.parse` / `getQueryParameter` in this helper; Robolectric-free unit tests will fail with `Method parse in android.net.Uri not mocked`.
+- Unit tests must cover deep-link ticket, HTTPS callback ticket, provider-bind session, error query, and unrelated HTTPS rejection.
 ### Linux.do App Links auto-return
 
 - Declare verified HTTPS intent-filters for `/auth/linuxdo/callback` and `/auth/provider/bind` on the trusted API host (`manifestPlaceholders.synapseApiHost`).

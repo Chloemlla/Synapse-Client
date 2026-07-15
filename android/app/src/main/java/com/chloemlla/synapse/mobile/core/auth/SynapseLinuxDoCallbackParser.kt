@@ -1,6 +1,7 @@
 package com.chloemlla.synapse.mobile.core.auth
 
-import android.net.Uri
+import java.net.URI
+import java.net.URLDecoder
 
 /**
  * Parses Happy-TTS Linux.do OAuth completion redirects for the Android app.
@@ -20,14 +21,14 @@ object SynapseLinuxDoCallbackParser {
         val trimmed = raw.trim()
         if (trimmed.isBlank()) return false
         return try {
-            val uri = Uri.parse(trimmed)
+            val uri = URI(trimmed)
             when {
                 uri.scheme.equals(APP_SCHEME, ignoreCase = true) &&
                     uri.host.equals(APP_HOST, ignoreCase = true) -> true
                 uri.scheme.equals("https", ignoreCase = true) &&
                     (
-                        uri.path?.contains("/auth/linuxdo/callback") == true ||
-                            uri.path?.contains("/auth/provider/bind") == true
+                        uri.path.orEmpty().contains("/auth/linuxdo/callback") ||
+                            uri.path.orEmpty().contains("/auth/provider/bind")
                         ) -> true
                 else -> false
             }
@@ -40,17 +41,18 @@ object SynapseLinuxDoCallbackParser {
         val trimmed = raw.trim()
         require(trimmed.isNotBlank()) { "Linux.do 回调地址为空。" }
         val uri = try {
-            Uri.parse(trimmed)
+            URI(trimmed)
         } catch (error: Exception) {
             throw IllegalArgumentException("无法解析 Linux.do 回调地址。", error)
         }
 
-        val error = uri.getQueryParameter("error")?.takeIf { it.isNotBlank() }
-        val ticket = uri.getQueryParameter("ticket")?.takeIf { it.isNotBlank() }
-        val intent = uri.getQueryParameter("intent")?.takeIf { it.isNotBlank() }
-        val sessionToken = uri.getQueryParameter("sessionToken")?.takeIf { it.isNotBlank() }
-        val bindStatus = uri.getQueryParameter("status")?.takeIf { it.isNotBlank() }
-        val mergeToken = uri.getQueryParameter("mergeToken")?.takeIf { it.isNotBlank() }
+        val query = parseQuery(uri.rawQuery.orEmpty())
+        val error = query["error"]?.takeIf { it.isNotBlank() }
+        val ticket = query["ticket"]?.takeIf { it.isNotBlank() }
+        val intent = query["intent"]?.takeIf { it.isNotBlank() }
+        val sessionToken = query["sessionToken"]?.takeIf { it.isNotBlank() }
+        val bindStatus = query["status"]?.takeIf { it.isNotBlank() }
+        val mergeToken = query["mergeToken"]?.takeIf { it.isNotBlank() }
 
         val path = uri.path.orEmpty()
         val isProviderBindPath = path.contains("/auth/provider/bind")
@@ -69,4 +71,20 @@ object SynapseLinuxDoCallbackParser {
             mergeToken = mergeToken,
         )
     }
+
+    private fun parseQuery(rawQuery: String): Map<String, String> {
+        if (rawQuery.isBlank()) return emptyMap()
+        return rawQuery.split('&')
+            .mapNotNull { part ->
+                val separator = part.indexOf('=')
+                if (separator <= 0) return@mapNotNull null
+                val key = part.substring(0, separator).urlDecode()
+                val value = part.substring(separator + 1).urlDecode()
+                key to value
+            }
+            .toMap()
+    }
+
+    private fun String.urlDecode(): String =
+        URLDecoder.decode(this, Charsets.UTF_8.name())
 }
