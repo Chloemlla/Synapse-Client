@@ -510,12 +510,15 @@ class SynapseLoginViewModel(
         // Compatibility entry for manual assertion JSON (debug/fallback only).
         val current = state.value
         val options = current.passkeyOptions
-        val isDiscoverable = options?.discoverable == true || current.pendingTwoFactorChallenge == null
         val challenge = current.pendingTwoFactorChallenge
-        if (!isDiscoverable && (challenge == null || !challenge.methods.any { it.equals("Passkey", ignoreCase = true) })) {
+        // Discoverable Passkey needs no 2FA challenge. Non-discoverable requires a challenge that lists Passkey.
+        if (options?.discoverable != true && challenge != null &&
+            challenge.methods.none { it.equals("Passkey", ignoreCase = true) }
+        ) {
             mutableState.update { it.copy(error = "当前本客户端登录没有可用的 Passkey 验证方式。") }
             return
         }
+        val isDiscoverable = options?.discoverable == true || challenge == null
         val username = challenge?.user?.username?.takeIf { it.isNotBlank() } ?: current.username
         if (!isDiscoverable && username.isBlank()) {
             mutableState.update { it.copy(error = "缺少 Passkey 认证所需用户名。") }
