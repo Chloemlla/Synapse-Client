@@ -53,7 +53,7 @@ class SynapsePasskeyCredentialClient(
             }
             SynapsePasskeyJson.parseAuthenticationResponse(responseJson)
         } catch (error: GetCredentialCancellationException) {
-            throw IllegalStateException("已取消 Passkey 验证。", error)
+            throw IllegalStateException(mapCancellationError(error, actionLabel = "Passkey 验证"), error)
         } catch (error: NoCredentialException) {
             throw IllegalStateException(
                 "未找到可用的 Passkey。请确认：1) 本机或同一 Google 账号已保存该站通行密钥；2) 应用已与 RP 域名完成 Digital Asset Links 关联；3) 设备支持通行密钥。",
@@ -64,11 +64,35 @@ class SynapsePasskeyCredentialClient(
         }
     }
 
+    private fun mapCancellationError(
+        error: GetCredentialCancellationException,
+        actionLabel: String,
+    ): String {
+        val type = error.type.orEmpty()
+        val message = error.errorMessage?.toString()?.takeIf { it.isNotBlank() }
+        return SynapseFailureMessage.withDetails(
+            summary = SynapseCredentialErrorMapper.cancellationSummary(
+                systemMessage = message,
+                actionLabel = actionLabel,
+            ),
+            details = mapOf(
+                "异常类型" to error::class.java.name,
+                "Credential 错误类型" to type.takeIf { it.isNotBlank() },
+                "系统消息" to message,
+            ),
+        )
+    }
+
     private fun mapGetCredentialError(error: GetCredentialException): String {
         val type = error.type.orEmpty()
         val message = error.errorMessage?.toString()?.takeIf { it.isNotBlank() }
         val summary = when {
-            type.contains("CANCELED", ignoreCase = true) -> "已取消 Passkey 验证。"
+            type.contains("CANCELED", ignoreCase = true) ||
+                error is GetCredentialCancellationException ->
+                SynapseCredentialErrorMapper.cancellationSummary(
+                    systemMessage = message,
+                    actionLabel = "Passkey 验证",
+                )
             type.contains("NO_CREDENTIAL", ignoreCase = true) ->
                 "未找到可用的 Passkey。请确认本机已保存该账号的通行密钥，且已完成 Digital Asset Links 关联。"
             type.contains("INTERRUPTED", ignoreCase = true) -> "Passkey 验证被中断，请重试。"

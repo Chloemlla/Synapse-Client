@@ -194,6 +194,7 @@ Networking contract:
 | Google config returns enabled=true with clientId | Show SIWG entry; use Credential Manager with that serverClientId |
 | Google bind-session returns JWT | Save JWT encrypted, issue client login token |
 | Google bind-session returns requiresBinding=true | Fall back to POST /api/auth/google for mobile auto upsert |
+| Google Credential Manager returns cancellation with `Account reauth failed` / code 16 | Do not show plain “已取消”; tell the user to re-login the Google account in system settings or switch accounts; still include exception type and system message |
 | Google login disabled/unconfigured | Hide or disable SIWG entry; allow password/passkey login |
 | Linux.do config enabled | Show browser OAuth entry |
 | Linux.do exchange returns JWT | Save JWT encrypted, issue client login token |
@@ -334,6 +335,7 @@ App Links path matching:
 - Legacy flavor exports encrypted credentials + device id via signature-protected ContentProvider `com.synapse.mobile.migration`
 - Production flavor imports once on startup when local config is empty and the legacy package is installed
 - Never log migration payload contents (JWT / clientLoginToken)
+
 
 
 

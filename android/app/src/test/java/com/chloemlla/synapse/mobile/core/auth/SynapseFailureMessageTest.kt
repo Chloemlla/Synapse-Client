@@ -57,4 +57,21 @@ class SynapseFailureMessageTest {
         assertFalse(message.contains("ticket"))
         assertFalse(message.contains("intent"))
     }
+
+    @Test
+    fun skipsCauseMessageAlreadyPresentInPrimary() {
+        val cause = RuntimeException("[16] Account reauth failed.")
+        val primary = SynapseFailureMessage.withDetails(
+            summary = "Google 登录需要重新验证 Google 账号登录状态。请打开系统设置重新登录该账号，或更换账号后重试。",
+            details = mapOf(
+                "系统消息" to "[16] Account reauth failed.",
+            ),
+        )
+        val top = IllegalStateException(primary, cause)
+        val message = SynapseFailureMessage.from(top)
+
+        assertTrue(message.contains("重新验证"))
+        assertTrue(message.contains("系统消息：[16] Account reauth failed."))
+        assertFalse(message.contains("原因 #1："))
+    }
 }

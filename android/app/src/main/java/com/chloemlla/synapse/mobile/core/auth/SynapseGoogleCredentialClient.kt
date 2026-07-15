@@ -74,7 +74,7 @@ class SynapseGoogleCredentialClient(
                 }
             }
         } catch (error: GetCredentialCancellationException) {
-            throw IllegalStateException("已取消 Google 登录。", error)
+            throw IllegalStateException(mapCancellationError(error, actionLabel = "Google 登录"), error)
         } catch (error: NoCredentialException) {
             throw IllegalStateException(
                 "未找到可用的 Google 账号。请确认设备已登录 Google 账号，并安装/更新 Google Play 服务。",
@@ -142,11 +142,35 @@ class SynapseGoogleCredentialClient(
         }
     }
 
+    private fun mapCancellationError(
+        error: GetCredentialCancellationException,
+        actionLabel: String,
+    ): String {
+        val type = error.type.orEmpty()
+        val message = error.errorMessage?.toString()?.takeIf { it.isNotBlank() }
+        return SynapseFailureMessage.withDetails(
+            summary = SynapseCredentialErrorMapper.cancellationSummary(
+                systemMessage = message,
+                actionLabel = actionLabel,
+            ),
+            details = mapOf(
+                "异常类型" to error::class.java.name,
+                "Credential 错误类型" to type.takeIf { it.isNotBlank() },
+                "系统消息" to message,
+            ),
+        )
+    }
+
     private fun mapGetCredentialError(error: GetCredentialException): String {
         val type = error.type.orEmpty()
         val message = error.errorMessage?.toString()?.takeIf { it.isNotBlank() }
         val summary = when {
-            type.contains("CANCELED", ignoreCase = true) -> "已取消 Google 登录。"
+            type.contains("CANCELED", ignoreCase = true) ||
+                error is GetCredentialCancellationException ->
+                SynapseCredentialErrorMapper.cancellationSummary(
+                    systemMessage = message,
+                    actionLabel = "Google 登录",
+                )
             type.contains("NO_CREDENTIAL", ignoreCase = true) ->
                 "未找到可用的 Google 账号。请确认设备已登录 Google 账号。"
             type.contains("INTERRUPTED", ignoreCase = true) -> "Google 登录被中断，请重试。"

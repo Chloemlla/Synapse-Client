@@ -29,13 +29,17 @@ internal object SynapseFailureMessage {
             var depth = 1
             while (cause != null && depth <= MAX_CAUSE_DEPTH) {
                 val causeMessage = cause.message?.trim()?.takeIf { it.isNotBlank() }
-                add(
-                    if (causeMessage != null) {
-                        "原因 #$depth：${cause::class.java.name} - $causeMessage"
-                    } else {
-                        "原因 #$depth：${cause::class.java.name}"
-                    },
-                )
+                // Skip pure wrappers when the primary body already embeds the same diagnostic text.
+                val alreadyCovered = causeMessage != null && primary.contains(causeMessage)
+                if (!alreadyCovered) {
+                    add(
+                        if (causeMessage != null) {
+                            "原因 #$depth：${cause::class.java.name} - $causeMessage"
+                        } else {
+                            "原因 #$depth：${cause::class.java.name}"
+                        },
+                    )
+                }
                 cause = cause.cause
                 depth += 1
             }
@@ -75,3 +79,4 @@ internal object SynapseFailureMessage {
         return value.take(MAX_TOTAL_CHARS - 1).trimEnd() + "…"
     }
 }
+
