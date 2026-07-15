@@ -347,6 +347,17 @@ App Links path matching:
 - Migration breadcrumbs use `com.chloemlla.lumen.crash.CrashBreadcrumbs`.
 - Do not vendor `android/lumen-crash` sources or reintroduce app-local crash core/UI.
 
+### Live Updates
 
-
+- Follow Android Live Update rules: ongoing, user-initiated, time-sensitive waits only.
+- Current host use cases:
+  - Web QR scanned → waiting for in-app confirm
+  - Linux.do browser auth opened → waiting for App Link / ticket return
+- Implementation:
+  - `SynapseLiveUpdateNotifier` posts ongoing notifications with `setRequestPromotedOngoing` / `EXTRA_REQUEST_PROMOTED_ONGOING`
+  - Manifest includes non-runtime `POST_PROMOTED_NOTIFICATIONS` and runtime `POST_NOTIFICATIONS` (API 33+)
+  - Channel importance must not be `IMPORTANCE_MIN`
+  - No custom RemoteViews / colorized / group-summary notifications for Live Updates
+- Do not use Live Updates for terminal history, idle session status, or permanent presence.
+- Never put JWT / clientLoginToken / passwords into notification text.
 

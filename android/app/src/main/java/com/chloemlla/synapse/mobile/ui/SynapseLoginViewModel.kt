@@ -15,6 +15,9 @@ import com.chloemlla.synapse.mobile.core.auth.SynapseGoogleCredentialClient
 import com.chloemlla.synapse.mobile.core.auth.SynapseLinuxDoCallbackParser
 import com.chloemlla.synapse.mobile.core.auth.LinuxDoAuthConfig
 import com.chloemlla.synapse.mobile.core.auth.SynapseQrPayload
+import com.chloemlla.synapse.mobile.core.notify.SynapseLiveUpdateCopy
+import com.chloemlla.synapse.mobile.core.notify.SynapseLiveUpdateKind
+import com.chloemlla.synapse.mobile.core.notify.SynapseLiveUpdateNotifier
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +27,7 @@ import org.json.JSONObject
 
 class SynapseLoginViewModel(
     private val repository: SynapseAuthRepository,
+    private val liveUpdateNotifier: SynapseLiveUpdateNotifier? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(
         SynapseUiState(
@@ -34,6 +38,8 @@ class SynapseLoginViewModel(
         ),
     )
     val state: StateFlow<SynapseUiState> = mutableState.asStateFlow()
+    @Volatile
+    private var activeLiveUpdateKind: SynapseLiveUpdateKind? = null
     init {
         if (repository.revokeExpiredClientTokens()) {
             mutableState.update {
@@ -67,6 +73,10 @@ class SynapseLoginViewModel(
                 error = null,
                 status = "已清除网页登录二维码。",
             )
+        }
+        liveUpdateNotifier?.cancel(SynapseLiveUpdateKind.WebQrLogin)
+        if (activeLiveUpdateKind == SynapseLiveUpdateKind.WebQrLogin) {
+            activeLiveUpdateKind = null
         }
     }
 
@@ -263,6 +273,7 @@ class SynapseLoginViewModel(
         if (state.value.hasUsableQrPayload) {
             markScanned()
         }
+        publishWebQrWaitingLiveUpdate()
     }
 
     fun login() {
@@ -611,6 +622,8 @@ class SynapseLoginViewModel(
                 error = null,
             )
         }
+        liveUpdateNotifier?.publish(SynapseLiveUpdateCopy.linuxDoWaiting())
+        activeLiveUpdateKind = SynapseLiveUpdateKind.LinuxDoAuth
     }
 
     fun handleIncomingUri(raw: String) {
@@ -652,6 +665,10 @@ class SynapseLoginViewModel(
                     status = "",
                 )
             }
+            liveUpdateNotifier?.publish(
+                SynapseLiveUpdateCopy.linuxDoFailed("Linux.do 授权失败：${payload.error}"),
+            )
+            activeLiveUpdateKind = null
             return
         }
 
@@ -671,6 +688,10 @@ class SynapseLoginViewModel(
                     status = "",
                 )
             }
+            liveUpdateNotifier?.publish(
+                SynapseLiveUpdateCopy.linuxDoFailed("该 Linux.do 账号尚未绑定本地账号。"),
+            )
+            activeLiveUpdateKind = null
             return
         }
 
@@ -689,6 +710,10 @@ class SynapseLoginViewModel(
                     ),
                 )
             }
+            liveUpdateNotifier?.publish(
+                SynapseLiveUpdateCopy.linuxDoFailed("Linux.do 回调缺少登录票据 ticket。"),
+            )
+            activeLiveUpdateKind = null
             return
         }
 
@@ -696,6 +721,8 @@ class SynapseLoginViewModel(
     }
 
     fun exchangeLinuxDoTicket(ticket: String) {
+        liveUpdateNotifier?.publish(SynapseLiveUpdateCopy.linuxDoCompleting())
+        activeLiveUpdateKind = SynapseLiveUpdateKind.LinuxDoAuth
         launchAction {
             val outcome = repository.signInWithLinuxDoTicket(
                 ticket = ticket,
@@ -713,6 +740,8 @@ class SynapseLoginViewModel(
                 )
             }
             val name = outcome.user?.username ?: outcome.user?.email ?: "当前账号"
+            liveUpdateNotifier?.publish(SynapseLiveUpdateCopy.linuxDoSucceeded())
+            activeLiveUpdateKind = null
             "Linux.do 登录成功，已登录本客户端并签发客户端登录令牌。当前账号：$name"
         }
     }
@@ -841,6 +870,7 @@ class SynapseLoginViewModel(
             val result = repository.parseAndMarkScanned(rawPayload)
             val parsed = SynapseQrPayload.parse(rawPayload)
             mutableState.update { it.copy(parsedQrPayload = parsed) }
+            publishWebQrWaitingLiveUpdate(parsed)
             "已标记网页登录扫码状态：${result.status}"
         }
     }
@@ -907,9 +937,13 @@ class SynapseLoginViewModel(
 
     private fun confirmQrLoginWithSelectedAccount() {
         val rawPayload = state.value.manualQrPayload
+        val site = state.value.parsedQrPayload?.apiBaseUrl
+        liveUpdateNotifier?.publish(SynapseLiveUpdateCopy.webQrCompleting(site))
+        activeLiveUpdateKind = SynapseLiveUpdateKind.WebQrLogin
         launchAction {
             val result = repository.confirmQrLogin(rawPayload)
-            val site = state.value.parsedQrPayload?.apiBaseUrl
+            liveUpdateNotifier?.publish(SynapseLiveUpdateCopy.webQrSucceeded(site))
+            activeLiveUpdateKind = null
             if (site.isNullOrBlank()) {
                 "网页登录已确认：${result.status}"
             } else {
@@ -965,7 +999,35 @@ class SynapseLoginViewModel(
                             error = SynapseFailureMessage.from(error),
                         )
                     }
+                    publishFailureLiveUpdateIfNeeded(error)
             }
+        }
+    }
+
+    private fun publishWebQrWaitingLiveUpdate(payload: SynapseQrPayload? = state.value.parsedQrPayload) {
+        val usable = payload != null && !payload.isExpired
+        if (!usable) return
+        liveUpdateNotifier?.publish(
+            SynapseLiveUpdateCopy.webQrWaiting(
+                site = payload?.apiBaseUrl,
+                expiresAtEpochMillis = payload?.expiresAt?.toEpochMilli(),
+            ),
+        )
+        activeLiveUpdateKind = SynapseLiveUpdateKind.WebQrLogin
+    }
+
+    private fun publishFailureLiveUpdateIfNeeded(error: Throwable) {
+        val message = SynapseFailureMessage.from(error)
+        when (activeLiveUpdateKind) {
+            SynapseLiveUpdateKind.LinuxDoAuth -> {
+                liveUpdateNotifier?.publish(SynapseLiveUpdateCopy.linuxDoFailed(message))
+                activeLiveUpdateKind = null
+            }
+            SynapseLiveUpdateKind.WebQrLogin -> {
+                liveUpdateNotifier?.publish(SynapseLiveUpdateCopy.webQrFailed(message))
+                activeLiveUpdateKind = null
+            }
+            null -> Unit
         }
     }
 
@@ -1008,11 +1070,12 @@ class SynapseLoginViewModel(
 
     class Factory(
         private val repository: SynapseAuthRepository,
+        private val liveUpdateNotifier: SynapseLiveUpdateNotifier? = null,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(SynapseLoginViewModel::class.java)) {
-                return SynapseLoginViewModel(repository) as T
+                return SynapseLoginViewModel(repository, liveUpdateNotifier) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }

@@ -7,9 +7,12 @@ import com.chloemlla.lumen.crash.CrashReport
 import com.chloemlla.lumen.crash.LumenCrash
 import com.chloemlla.lumen.crash.LumenCrashConfig
 import com.chloemlla.synapse.mobile.core.migration.LegacyPackageConfigMigrator
+import com.chloemlla.synapse.mobile.core.notify.SynapseLiveUpdateNotifier
 import com.tencent.mmkv.MMKV
 
 class SynapseApplication : Application() {
+    val liveUpdateNotifier: SynapseLiveUpdateNotifier by lazy { SynapseLiveUpdateNotifier(this) }
+
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
         installLumenCrashSdk()
@@ -22,6 +25,7 @@ class SynapseApplication : Application() {
         CrashBreadcrumbs.record("Application.onCreate")
         initializeMmkvOrRecordCrash()
         migrateLegacyPackageConfigOrRecordCrash()
+        liveUpdateNotifier.ensureChannels()
     }
 
     private fun installLumenCrashSdk() {

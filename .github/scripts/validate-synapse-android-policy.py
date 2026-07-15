@@ -57,6 +57,12 @@ require_contains("android/app/build.gradle.kts", 'implementation("com.chloemlla.
 require_contains("android/app/src/main/java/com/chloemlla/synapse/mobile/SynapseApplication.kt", "LumenCrash.install")
 require_contains("android/app/src/main/java/com/chloemlla/synapse/mobile/MainActivity.kt", "LumenCrashReportScreen")
 
+require_contains("android/app/src/main/AndroidManifest.xml", "POST_PROMOTED_NOTIFICATIONS")
+require_contains("android/app/src/main/AndroidManifest.xml", "POST_NOTIFICATIONS")
+require_contains("android/app/src/main/java/com/chloemlla/synapse/mobile/core/notify/SynapseLiveUpdateNotifier.kt", "setRequestPromotedOngoing")
+require_contains("android/app/src/main/java/com/chloemlla/synapse/mobile/ui/SynapseLoginViewModel.kt", "liveUpdateNotifier")
+
+
 require_contains("android/app/src/legacy/AndroidManifest.xml", "com.synapse.mobile.migration")
 require_contains("android/app/src/legacy/AndroidManifest.xml", "MigrationConfigProvider")
 require_contains(".github/workflows/synapse-android.yml", "gradle testProductionDebugUnitTest")

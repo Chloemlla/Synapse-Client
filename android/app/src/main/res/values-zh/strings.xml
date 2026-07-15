@@ -2,6 +2,9 @@
 <resources>
     <string name="app_name">Synapse Mobile</string>
     <string name="camera_permission_required">需要相机权限才能扫描登录二维码。</string>
+    <string name="notification_permission_required">需要通知权限才能显示进行中的登录实时更新。</string>
+    <string name="live_update_channel_name">登录实时更新</string>
+    <string name="live_update_channel_description">用户主动发起且有明确起止的登录等待，例如网页扫码确认与 Linux.do 授权返回。</string>
     <string name="crash_report_title">已保存崩溃报告</string>
     <string name="crash_report_message">Synapse Mobile 已从异常退出中恢复。继续使用前，可以先查看、复制或分享这份报告。</string>
     <string name="crash_report_share_subject">Synapse Mobile 崩溃报告</string>

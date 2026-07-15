@@ -2,6 +2,9 @@
 <resources>
     <string name="app_name">Synapse Mobile</string>
     <string name="camera_permission_required">Camera permission is required to scan login QR codes.</string>
+    <string name="notification_permission_required">Notification permission is required to show Live Updates for ongoing login confirmation.</string>
+    <string name="live_update_channel_name">Live login updates</string>
+    <string name="live_update_channel_description">Ongoing, user-initiated login waits such as web QR confirmation and Linux.do authorization return.</string>
     <string name="crash_report_title">Crash report saved</string>
     <string name="crash_report_message">Synapse Mobile recovered from a crash. Review, copy, or share this report before continuing.</string>
     <string name="crash_report_share_subject">Synapse Mobile crash report</string>

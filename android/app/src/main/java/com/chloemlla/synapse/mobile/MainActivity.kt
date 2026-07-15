@@ -1,13 +1,18 @@
 package com.chloemlla.synapse.mobile
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import com.chloemlla.lumen.crash.CrashBreadcrumbs
 import com.chloemlla.lumen.crash.LumenCrash
@@ -20,9 +25,14 @@ import com.chloemlla.synapse.mobile.ui.SynapseMobileTheme
 class MainActivity : ComponentActivity() {
     private lateinit var viewModel: SynapseLoginViewModel
 
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { /* Live Updates degrade silently when denied. */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CrashBreadcrumbs.record("MainActivity.onCreate")
+        maybeRequestNotificationPermission()
 
         val app = application as SynapseApplication
         var initialStartupReport = LumenCrash.loadPendingReport()
@@ -78,11 +88,25 @@ class MainActivity : ComponentActivity() {
             )
             ViewModelProvider(
                 this,
-                SynapseLoginViewModel.Factory(repository),
+                SynapseLoginViewModel.Factory(
+                    repository = repository,
+                    liveUpdateNotifier = app.liveUpdateNotifier,
+                ),
             )[SynapseLoginViewModel::class.java]
         } catch (throwable: Throwable) {
             app.recordStartupCrash(throwable)
             null
+        }
+    }
+
+    private fun maybeRequestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 }

@@ -18,6 +18,7 @@
 - [ ] Release builds still use minification, resource shrinking, and targeted ProGuard/R8 keeps instead of broad app-wide keep rules.
 - [ ] Credential storage remains encrypted and private to the app.
 - [ ] Crash reporting still uses GitHub Packages `com.chloemlla.lumen:lumen-crash` (`LumenCrash.install` + `LumenCrashReportScreen`), not app-local `core/crash` duplicates.
+- [ ] Live Updates only cover user-initiated ongoing waits (web QR confirmation / Linux.do auth return) via `SynapseLiveUpdateNotifier`.
 - [ ] `synapse://mobile-login` parsing still rejects wrong scheme/host and non-HTTPS `apiBaseUrl`.
 - [ ] GitHub Actions still runs unit tests, lint, release assemble, and uploads reports/APK artifacts.
 - [ ] Unit tests cover pure parser/security helper behavior.
