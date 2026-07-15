@@ -1,5 +1,6 @@
 package com.chloemlla.synapse.mobile.core.notify
 
+import android.annotation.SuppressLint
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -131,9 +132,7 @@ class SynapseLiveUpdateNotifier(
         }
 
         val notification = builder.build()
-        runCatching {
-            notificationManager.notify(notificationId, notification)
-        }
+        postNotification(notificationId, notification)
 
         snapshot.autoDismissAfterMs
             ?.takeIf { it > 0L && !snapshot.ongoing }
@@ -166,6 +165,27 @@ class SynapseLiveUpdateNotifier(
 
     private fun cancelScheduledDismiss(notificationId: Int) {
         autoDismissRunnables.remove(notificationId)?.let(mainHandler::removeCallbacks)
+    }
+
+    /**
+     * Lint cannot prove [canPostNotifications] covers [Manifest.permission.POST_NOTIFICATIONS]
+     * across a helper call. Re-check immediately before posting and swallow revoke races.
+     */
+    @SuppressLint("MissingPermission")
+    private fun postNotification(notificationId: Int, notification: android.app.Notification) {
+        if (!canPostNotifications()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                appContext,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) return
+        }
+        try {
+            notificationManager.notify(notificationId, notification)
+        } catch (_: SecurityException) {
+            // Permission can be revoked between the check and the notify call.
+        }
     }
 
     private fun applyRequestPromotedOngoing(builder: NotificationCompat.Builder) {
