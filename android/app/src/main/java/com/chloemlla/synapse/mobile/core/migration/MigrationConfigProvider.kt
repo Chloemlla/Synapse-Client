@@ -9,7 +9,7 @@ import android.net.Uri
 import android.os.Build
 import com.chloemlla.synapse.mobile.core.auth.SynapseCredentialStore
 import com.chloemlla.synapse.mobile.core.auth.SynapseDeviceId
-import com.chloemlla.synapse.mobile.core.crash.CrashBreadcrumbs
+import com.chloemlla.lumen.crash.CrashBreadcrumbs
 import java.security.MessageDigest
 
 /**

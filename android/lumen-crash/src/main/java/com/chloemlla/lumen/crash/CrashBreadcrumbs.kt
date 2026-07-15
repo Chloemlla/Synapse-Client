@@ -1,4 +1,4 @@
-package com.chloemlla.synapse.mobile.core.crash
+package com.chloemlla.lumen.crash
 
 import java.time.Instant
 import java.time.ZoneId
@@ -12,7 +12,7 @@ object CrashBreadcrumbs {
 
     @Synchronized
     fun record(event: String) {
-        val sanitized = CrashReportSanitizer.sanitize(event).take(180)
+        val sanitized = sanitize(event).take(180)
         if (sanitized.isBlank()) return
         if (events.size >= MAX_EVENTS) {
             events.removeFirst()
@@ -25,4 +25,18 @@ object CrashBreadcrumbs {
 
     @Synchronized
     fun snapshot(): List<String> = events.toList()
+
+    @Synchronized
+    fun clear() {
+        events.clear()
+    }
+
+    private fun sanitize(value: String): String {
+        return value
+            .replace(Regex("""[A-Za-z]:\\Users\\[^\\\s]+"""), "[user-home]")
+            .replace(Regex("""/home/[^/\s]+"""), "[user-home]")
+            .replace(Regex("""/Users/[^/\s]+"""), "[user-home]")
+            .replace(Regex("""content://[^\s]+"""), "[content-uri]")
+            .replace(Regex("""file://[^\s]+"""), "[file-uri]")
+    }
 }

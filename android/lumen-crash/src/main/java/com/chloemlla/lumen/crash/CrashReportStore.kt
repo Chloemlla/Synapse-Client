@@ -1,10 +1,9 @@
-package com.chloemlla.synapse.mobile.core.crash
+package com.chloemlla.lumen.crash
 
 import android.content.Context
+import org.json.JSONObject
 import java.io.File
 import java.io.IOException
-import org.json.JSONArray
-import org.json.JSONObject
 
 class CrashReportStore(context: Context) {
     private val files = listOf(
@@ -14,6 +13,7 @@ class CrashReportStore(context: Context) {
     )
 
     fun save(report: CrashReport) {
+        AuthorIntegrity.verifyOrThrow("store-save")
         val payload = report.toJson().toString()
         val failures = mutableListOf<Throwable>()
         var saved = false
@@ -54,21 +54,6 @@ class CrashReportStore(context: Context) {
             tempFile.delete()
             writeText(payload, Charsets.UTF_8)
         }
-    }
-
-    private fun CrashReport.toJson(): JSONObject = JSONObject().apply {
-        put("reportId", reportId)
-        put("crashedAtMillis", crashedAtMillis)
-        put("crashedAtText", crashedAtText)
-        put("exceptionType", exceptionType)
-        put("rootCause", rootCause)
-        put("threadName", threadName)
-        put("processName", processName)
-        put("systemInfo", systemInfo)
-        put("stackTrace", stackTrace)
-        put("recentEvents", JSONArray().apply {
-            recentEvents.forEach { event -> put(event) }
-        })
     }
 
     private companion object {

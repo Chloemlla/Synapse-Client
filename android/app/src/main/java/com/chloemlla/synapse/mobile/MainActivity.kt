@@ -9,9 +9,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModelProvider
-import com.chloemlla.synapse.mobile.core.crash.CrashBreadcrumbs
+import com.chloemlla.lumen.crash.CrashBreadcrumbs
+import com.chloemlla.lumen.crash.LumenCrash
+import com.chloemlla.lumen.crash.ui.LumenCrashReportScreen
 import com.chloemlla.synapse.mobile.core.auth.SynapseAuthRepository
-import com.chloemlla.synapse.mobile.ui.CrashReportScreen
 import com.chloemlla.synapse.mobile.ui.SynapseLoginViewModel
 import com.chloemlla.synapse.mobile.ui.SynapseMobileApp
 import com.chloemlla.synapse.mobile.ui.SynapseMobileTheme
@@ -24,14 +25,14 @@ class MainActivity : ComponentActivity() {
         CrashBreadcrumbs.record("MainActivity.onCreate")
 
         val app = application as SynapseApplication
-        var initialStartupReport = app.startupCrashReport ?: app.crashReports.load()
+        var initialStartupReport = LumenCrash.loadPendingReport()
         val initialViewModel = if (initialStartupReport == null) {
             createSynapseViewModel(app)?.also { viewModel = it }
         } else {
             null
         }
         if (initialStartupReport == null && initialViewModel == null) {
-            initialStartupReport = app.startupCrashReport ?: app.crashReports.load()
+            initialStartupReport = LumenCrash.loadPendingReport()
         }
 
         if (::viewModel.isInitialized) {
@@ -43,10 +44,10 @@ class MainActivity : ComponentActivity() {
             SynapseMobileTheme {
                 val report = startupReport
                 if (report != null) {
-                    CrashReportScreen(
+                    LumenCrashReportScreen(
                         report = report,
                         onContinue = {
-                            app.clearStartupCrashReport()
+                            LumenCrash.clearPendingReport()
                             startupReport = null
                             if (initialViewModel == null) recreate()
                         },

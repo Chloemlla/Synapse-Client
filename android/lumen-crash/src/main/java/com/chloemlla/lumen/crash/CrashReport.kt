@@ -1,9 +1,10 @@
-package com.chloemlla.synapse.mobile.core.crash
+package com.chloemlla.lumen.crash
 
 import android.app.Application
 import android.os.Build
 import android.os.Process
-import com.chloemlla.synapse.mobile.BuildConfig
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.security.MessageDigest
@@ -24,33 +25,44 @@ data class CrashReport(
     val systemInfo: String,
     val stackTrace: String,
     val recentEvents: List<String> = emptyList(),
+    val authorName: String = CrashAuthorAttribution.AUTHOR_NAME,
+    val authorUrl: String = CrashAuthorAttribution.AUTHOR_URL,
+    val authorFingerprint: String = CrashAuthorAttribution.FINGERPRINT_HEX,
 ) {
-    fun toClipboardText(): String = buildString {
-        appendLine("Report ID: $reportId")
-        appendLine("Crash time: $crashedAtText")
-        appendLine("Exception type: $exceptionType")
-        appendLine("Root cause: $rootCause")
-        appendLine("Thread: $threadName")
-        appendLine("Process: $processName")
-        appendLine("System info:")
-        appendLine(systemInfo)
-        if (recentEvents.isNotEmpty()) {
-            appendLine("Recent app events:")
-            recentEvents.forEach { appendLine(it) }
+    fun toClipboardText(): String {
+        AuthorIntegrity.verifyOrThrow("export-clipboard")
+        val author = AuthorIntegrity.verifiedAuthorBlock()
+        return buildString {
+            appendLine("Report ID: $reportId")
+            appendLine("Crash time: $crashedAtText")
+            appendLine("Exception type: $exceptionType")
+            appendLine("Root cause: $rootCause")
+            appendLine("Thread: $threadName")
+            appendLine("Process: $processName")
+            appendLine("System info:")
+            appendLine(systemInfo)
+            if (recentEvents.isNotEmpty()) {
+                appendLine("Recent app events:")
+                recentEvents.forEach { appendLine(it) }
+            }
+            appendLine("Stack trace:")
+            appendLine(stackTrace)
+            appendLine("Author: ${author.authorName}")
+            appendLine("Author URL: ${author.authorUrl}")
+            appendLine("Author fingerprint: ${author.authorFingerprint}")
+            appendLine(author.footerLabel)
         }
-        appendLine("Stack trace:")
-        appendLine(stackTrace)
     }
 
     companion object {
-        fun fromThrowable(throwable: Throwable): CrashReport {
+        fun fromThrowable(throwable: Throwable, appInfo: CrashAppInfo): CrashReport {
+            AuthorIntegrity.verifyOrThrow("from-throwable")
+            val author = AuthorIntegrity.verifiedAuthorBlock()
             val root = throwable.rootCause()
             val nowMillis = System.currentTimeMillis()
-            val stackTrace = CrashReportSanitizer.sanitize(throwable.stackTraceText())
+            val stackTrace = sanitize(throwable.stackTraceText())
             val exceptionType = throwable::class.java.name
-            val rootCause = CrashReportSanitizer.sanitize(
-                root.message?.takeIf { it.isNotBlank() } ?: root::class.java.name,
-            )
+            val rootCause = sanitize(root.message?.takeIf { it.isNotBlank() } ?: root::class.java.name)
             return CrashReport(
                 reportId = reportId(nowMillis, exceptionType, rootCause, stackTrace),
                 crashedAtMillis = nowMillis,
@@ -59,19 +71,26 @@ data class CrashReport(
                 rootCause = rootCause,
                 threadName = Thread.currentThread().name,
                 processName = processName(),
-                systemInfo = buildSystemInfo(),
+                systemInfo = buildSystemInfo(appInfo),
                 stackTrace = stackTrace,
                 recentEvents = CrashBreadcrumbs.snapshot(),
+                authorName = author.authorName,
+                authorUrl = author.authorUrl,
+                authorFingerprint = author.authorFingerprint,
             )
         }
 
-        fun fromThrowableFallback(throwable: Throwable, reportFailure: Throwable): CrashReport {
+        fun fromThrowableFallback(
+            throwable: Throwable,
+            reportFailure: Throwable,
+            appInfo: CrashAppInfo,
+        ): CrashReport {
+            AuthorIntegrity.verifyOrThrow("from-throwable-fallback")
+            val author = AuthorIntegrity.verifiedAuthorBlock()
             val nowMillis = System.currentTimeMillis()
-            val stackTrace = CrashReportSanitizer.sanitize(throwable.stackTraceToString())
+            val stackTrace = throwable.stackTraceToString()
             val exceptionType = throwable::class.java.name
-            val rootCause = CrashReportSanitizer.sanitize(
-                throwable.message?.takeIf { it.isNotBlank() } ?: throwable::class.java.name,
-            )
+            val rootCause = throwable.message?.takeIf { it.isNotBlank() } ?: throwable::class.java.name
             return CrashReport(
                 reportId = reportId(nowMillis, exceptionType, rootCause, stackTrace),
                 crashedAtMillis = nowMillis,
@@ -80,20 +99,27 @@ data class CrashReport(
                 rootCause = rootCause,
                 threadName = Thread.currentThread().name,
                 processName = processName(),
-                systemInfo = "Crash report construction failed: ${reportFailure::class.java.name}",
+                systemInfo = "Crash report construction failed: ${reportFailure::class.java.name}\n" +
+                    buildSystemInfo(appInfo),
                 stackTrace = stackTrace,
                 recentEvents = CrashBreadcrumbs.snapshot(),
+                authorName = author.authorName,
+                authorUrl = author.authorUrl,
+                authorFingerprint = author.authorFingerprint,
             )
         }
 
-        private fun buildSystemInfo(): String = listOf(
-            "App version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-            "Build type: ${BuildConfig.BUILD_TYPE}",
+        private fun buildSystemInfo(appInfo: CrashAppInfo): String = listOf(
+            "App: ${appInfo.appDisplayName}",
+            "App version: ${appInfo.versionName} (${appInfo.versionCode})",
+            "Commit: ${appInfo.commitHash}",
             "Device: ${Build.MANUFACTURER} ${Build.MODEL}",
             "Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})",
             "ABI: ${Build.SUPPORTED_ABIS.joinToString()}",
             "Memory: ${memorySnapshot()}",
             "Build fingerprint: ${Build.FINGERPRINT}",
+            "Crash SDK author: ${CrashAuthorAttribution.AUTHOR_NAME}",
+            "Crash SDK author URL: ${CrashAuthorAttribution.AUTHOR_URL}",
         ).joinToString("\n")
 
         private fun processName(): String {
@@ -139,11 +165,22 @@ data class CrashReport(
             return writer.toString()
         }
 
+        private fun sanitize(value: String): String {
+            return value
+                .replace(Regex("""[A-Za-z]:\\Users\\[^\\\s]+"""), "[user-home]")
+                .replace(Regex("""/home/[^/\s]+"""), "[user-home]")
+                .replace(Regex("""/Users/[^/\s]+"""), "[user-home]")
+                .replace(Regex("""content://[^\s]+"""), "[content-uri]")
+                .replace(Regex("""file://[^\s]+"""), "[file-uri]")
+        }
+
         private const val BYTES_PER_MEBIBYTE = 1024L * 1024L
     }
 }
 
-fun crashReportFromJson(json: org.json.JSONObject): CrashReport {
+fun crashReportFromJson(json: JSONObject): CrashReport {
+    AuthorIntegrity.verifyOrThrow("from-json")
+    val author = AuthorIntegrity.verifiedAuthorBlock()
     return CrashReport(
         reportId = json.optString("reportId").ifBlank {
             "${json.getLong("crashedAtMillis")}".takeLast(12)
@@ -162,5 +199,30 @@ fun crashReportFromJson(json: org.json.JSONObject): CrashReport {
                 events.optString(index).takeIf { it.isNotBlank() }?.let(::add)
             }
         },
+        authorName = author.authorName,
+        authorUrl = author.authorUrl,
+        authorFingerprint = author.authorFingerprint,
     )
+}
+
+fun CrashReport.toJson(): JSONObject {
+    AuthorIntegrity.verifyOrThrow("to-json")
+    val author = AuthorIntegrity.verifiedAuthorBlock()
+    return JSONObject().apply {
+        put("reportId", reportId)
+        put("crashedAtMillis", crashedAtMillis)
+        put("crashedAtText", crashedAtText)
+        put("exceptionType", exceptionType)
+        put("rootCause", rootCause)
+        put("threadName", threadName)
+        put("processName", processName)
+        put("systemInfo", systemInfo)
+        put("stackTrace", stackTrace)
+        put("recentEvents", JSONArray().apply {
+            recentEvents.forEach { event -> put(event) }
+        })
+        put("authorName", author.authorName)
+        put("authorUrl", author.authorUrl)
+        put("authorFingerprint", author.authorFingerprint)
+    }
 }

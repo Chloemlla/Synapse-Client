@@ -5,7 +5,7 @@ import android.net.Uri
 import com.chloemlla.synapse.mobile.BuildConfig
 import com.chloemlla.synapse.mobile.core.auth.SynapseCredentialStore
 import com.chloemlla.synapse.mobile.core.auth.SynapseDeviceId
-import com.chloemlla.synapse.mobile.core.crash.CrashBreadcrumbs
+import com.chloemlla.lumen.crash.CrashBreadcrumbs
 
 class LegacyPackageConfigMigrator(
     context: Context,

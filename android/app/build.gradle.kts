@@ -64,6 +64,12 @@ android {
             "PRODUCTION_APPLICATION_ID",
             "\"com.chloemlla.synapse.mobile\"",
         )
+        val shortHash = providerString("SYNAPSE_SHORT_HASH", "unknown")
+        buildConfigField(
+            "String",
+            "SHORT_HASH",
+            "\"${buildConfigString(shortHash)}\"",
+        )
         // Used by Android App Links for Linux.do / provider-bind HTTPS callbacks.
         manifestPlaceholders["synapseApiHost"] = synapseApiHost
     }
@@ -150,6 +156,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.core:core-ktx:1.16.0")
+    implementation(project(":lumen-crash"))
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")

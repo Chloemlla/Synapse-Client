@@ -336,6 +336,15 @@ App Links path matching:
 - Production flavor imports once on startup when local config is empty and the legacy package is installed
 - Never log migration payload contents (JWT / clientLoginToken)
 
+### Crash reporting
+
+- Use vendored Android library module `:lumen-crash` (`android/lumen-crash`) instead of app-local crash core/UI.
+- Install early from `SynapseApplication.attachBaseContext` via `LumenCrash.install(...)`.
+- Gate startup UI with `LumenCrash.loadPendingReport()` + `LumenCrashReportScreen`.
+- Keep host FileProvider authority `${applicationId}.fileprovider` and pass it through `LumenCrashConfig.fileProviderAuthority`.
+- Product copy overrides stay in host strings (`crash_report_title` / `crash_report_message` / `crash_report_share_subject`); library owns diagnostic UI copy.
+- Migration breadcrumbs use `com.chloemlla.lumen.crash.CrashBreadcrumbs`.
+
 
 
 

@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "SynapseMobile"
 include(":app")
+include(":lumen-crash")

@@ -41,6 +41,8 @@ Required Synapse runtime boundary rules:
 -keep class com.tencent.mmkv.** { *; }
 ```
 
+The vendored `:lumen-crash` module ships consumer ProGuard rules for author attribution integrity. Prefer those consumer rules over copying broad crash-package keeps into the app module.
+
 ### 3. Contracts
 
 - Release builds must keep `isMinifyEnabled = true`, `isShrinkResources = true`, and `proguard-android-optimize.txt`.

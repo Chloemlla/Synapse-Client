@@ -29,6 +29,7 @@ for required in (
     "android/settings.gradle.kts",
     "android/build.gradle.kts",
     "android/app/build.gradle.kts",
+    "android/lumen-crash/build.gradle.kts",
     "android/app/src/main/AndroidManifest.xml",
     "android/app/src/main/java/com/chloemlla/synapse/mobile/MainActivity.kt",
     "android/app/src/legacy/AndroidManifest.xml",
@@ -51,9 +52,15 @@ require_contains("android/app/build.gradle.kts", 'applicationId = "com.chloemlla
 require_contains("android/app/build.gradle.kts", 'applicationId = "com.synapse.mobile"')
 require_contains("android/app/build.gradle.kts", 'create("legacy")')
 require_contains("android/app/build.gradle.kts", 'create("production")')
+
+require_contains("android/settings.gradle.kts", 'include(":lumen-crash")')
+require_contains("android/app/build.gradle.kts", 'implementation(project(":lumen-crash"))')
+require_contains("android/app/src/main/java/com/chloemlla/synapse/mobile/SynapseApplication.kt", "LumenCrash.install")
+require_contains("android/app/src/main/java/com/chloemlla/synapse/mobile/MainActivity.kt", "LumenCrashReportScreen")
+
 require_contains("android/app/src/legacy/AndroidManifest.xml", "com.synapse.mobile.migration")
 require_contains("android/app/src/legacy/AndroidManifest.xml", "MigrationConfigProvider")
-require_contains(".github/workflows/synapse-android.yml", "gradle testProductionDebugUnitTest")
+require_contains(".github/workflows/synapse-android.yml", "gradle :lumen-crash:test testProductionDebugUnitTest")
 require_contains(".github/workflows/synapse-android.yml", "gradle lintProductionDebug")
 require_contains(".github/workflows/synapse-android.yml", "gradle assembleProductionRelease assembleLegacyRelease")
 

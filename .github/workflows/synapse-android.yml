@@ -68,7 +68,7 @@ jobs:
           SYNAPSE_ANDROID_VERSION_NAME: ${{ env.SYNAPSE_ANDROID_VERSION_NAME }}
           SYNAPSE_ANDROID_VERSION_CODE: ${{ env.SYNAPSE_ANDROID_VERSION_CODE }}
           SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
-        run: gradle testProductionDebugUnitTest --no-daemon --warning-mode all
+        run: gradle :lumen-crash:test testProductionDebugUnitTest --no-daemon --warning-mode all
 
       - name: Run Android lint
         env:
