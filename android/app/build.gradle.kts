@@ -26,11 +26,11 @@ val hasReleaseSigningConfig = listOf(
 ).all { it.isNotBlank() }
 
 android {
-    namespace = "com.synapse.mobile"
+    namespace = "com.chloemlla.synapse.mobile"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.synapse.mobile"
+        applicationId = "com.chloemlla.synapse.mobile"
         minSdk = 26
         targetSdk = 37
         versionCode = providers.environmentVariable("SYNAPSE_ANDROID_VERSION_CODE")
@@ -52,8 +52,33 @@ android {
             "SYNAPSE_API_BASE_URL",
             "\"${buildConfigString(synapseApiBaseUrl)}\"",
         )
+        buildConfigField(
+            "String",
+            "LEGACY_APPLICATION_ID",
+            "\"com.synapse.mobile\"",
+        )
+        buildConfigField(
+            "String",
+            "PRODUCTION_APPLICATION_ID",
+            "\"com.chloemlla.synapse.mobile\"",
+        )
         // Used by Android App Links for Linux.do / provider-bind HTTPS callbacks.
         manifestPlaceholders["synapseApiHost"] = synapseApiHost
+    }
+
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("production") {
+            dimension = "distribution"
+            isDefault = true
+            applicationId = "com.chloemlla.synapse.mobile"
+            buildConfigField("boolean", "IS_LEGACY_PACKAGE", "false")
+        }
+        create("legacy") {
+            dimension = "distribution"
+            applicationId = "com.synapse.mobile"
+            buildConfigField("boolean", "IS_LEGACY_PACKAGE", "true")
+        }
     }
 
     buildFeatures {

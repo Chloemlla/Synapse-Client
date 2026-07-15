@@ -1,16 +1,23 @@
 # Release obfuscation is intentionally boundary-focused. Avoid broad
-# com.synapse.mobile keeps so R8 can shrink, optimize, and rename app code.
+# com.chloemlla.synapse.mobile keeps so R8 can shrink, optimize, and rename app code.
 -keepattributes *Annotation*, InnerClasses, EnclosingMethod, Signature
 -allowaccessmodification
 -repackageclasses s
 
 # Android framework entry points declared in AndroidManifest.xml.
--keep,allowoptimization class com.synapse.mobile.MainActivity {
+-keep,allowoptimization class com.chloemlla.synapse.mobile.MainActivity {
     public <init>();
     public <methods>;
     protected <methods>;
 }
--keep,allowoptimization class com.synapse.mobile.SynapseApplication {
+-keep,allowoptimization class com.chloemlla.synapse.mobile.SynapseApplication {
+    public <init>();
+    public <methods>;
+    protected <methods>;
+}
+
+# Legacy package migration export ContentProvider (legacy flavor manifest).
+-keep,allowoptimization class com.chloemlla.synapse.mobile.core.migration.MigrationConfigProvider {
     public <init>();
     public <methods>;
     protected <methods>;
@@ -27,7 +34,7 @@
 }
 
 # Enum helpers may be used by framework/runtime code and string comparisons.
--keepclassmembers enum com.synapse.mobile.** {
+-keepclassmembers enum com.chloemlla.synapse.mobile.** {
     public static final <fields>;
     public static **[] values();
     public static ** valueOf(java.lang.String);

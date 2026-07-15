@@ -34,8 +34,9 @@ android/app/proguard-rules.pro
 Required Synapse runtime boundary rules:
 
 ```proguard
--keep,allowoptimization class com.synapse.mobile.MainActivity { public <init>(); public <methods>; protected <methods>; }
--keep,allowoptimization class com.synapse.mobile.SynapseApplication { public <init>(); public <methods>; protected <methods>; }
+-keep,allowoptimization class com.chloemlla.synapse.mobile.MainActivity { public <init>(); public <methods>; protected <methods>; }
+-keep,allowoptimization class com.chloemlla.synapse.mobile.SynapseApplication { public <init>(); public <methods>; protected <methods>; }
+-keep,allowoptimization class com.chloemlla.synapse.mobile.core.migration.MigrationConfigProvider { public <init>(); public <methods>; protected <methods>; }
 -keepclassmembers class * { @android.webkit.JavascriptInterface <methods>; }
 -keep class com.tencent.mmkv.** { *; }
 ```
@@ -43,7 +44,7 @@ Required Synapse runtime boundary rules:
 ### 3. Contracts
 
 - Release builds must keep `isMinifyEnabled = true`, `isShrinkResources = true`, and `proguard-android-optimize.txt`.
-- Do not add broad app-wide rules such as `-keep class com.synapse.mobile.** { *; }`; they defeat obfuscation and dead-code removal.
+- Do not add broad app-wide rules such as `-keep class com.chloemlla.synapse.mobile.** { *; }`; they defeat obfuscation and dead-code removal.
 - Keep rules must document a concrete runtime boundary: manifest component, JavaScript bridge method, JNI/native loading class, serialized/persisted enum name, public external API, generated database/accessor, or reflection entry point.
 - Do not copy rules from Project-Lumen or another Android app unless Synapse has the matching runtime surface.
 - Prefer dependency consumer rules for AndroidX, Google, OkHttp, and Kotlin libraries; add Synapse rules only when local code creates a stable-name boundary.
@@ -58,7 +59,7 @@ Required Synapse runtime boundary rules:
 | New native/JNI bridge or native-loading library | Keep the bridge class/method names required by native lookup. |
 | New persisted enum names | Keep enum `values()` / `valueOf(String)` and public enum fields for that package. |
 | New reflection or class-name string lookup | Add a targeted keep rule and a comment explaining the lookup path. |
-| Broad `com.synapse.mobile.**` keep rule | Reject unless the task explicitly proves a whole package is a public stable-name API. |
+| Broad `com.chloemlla.synapse.mobile.**` keep rule | Reject unless the task explicitly proves a whole package is a public stable-name API. |
 | Lumen-only rules such as Room/WorkManager/native bridge copied without matching Synapse code | Remove them. |
 | Need to verify R8 output | Use GitHub Actions; do not run local Gradle commands. |
 
@@ -68,7 +69,7 @@ Good: release builds shrink and obfuscate app implementation code while only man
 
 Base: a dependency warning is suppressed with `-dontwarn` after confirming the library provides consumer rules and Synapse does not depend on local reflection names.
 
-Bad: adding `-keep class com.synapse.mobile.** { *; }`, copying Room or WorkManager rules without those dependencies, or disabling minification to work around a release failure.
+Bad: adding `-keep class com.chloemlla.synapse.mobile.** { *; }`, copying Room or WorkManager rules without those dependencies, or disabling minification to work around a release failure.
 
 ### 6. Tests Required
 
@@ -82,15 +83,15 @@ Bad: adding `-keep class com.synapse.mobile.** { *; }`, copying Room or WorkMana
 #### Wrong
 
 ```proguard
--keep class com.synapse.mobile.** { *; }
--keep,allowoptimization class com.synapse.mobile.** extends androidx.work.ListenableWorker { *; }
+-keep class com.chloemlla.synapse.mobile.** { *; }
+-keep,allowoptimization class com.chloemlla.synapse.mobile.** extends androidx.work.ListenableWorker { *; }
 -keep class com.projectlumen.app.core.security.NativeSecurityBridge { *; }
 ```
 
 #### Correct
 
 ```proguard
--keep,allowoptimization class com.synapse.mobile.MainActivity {
+-keep,allowoptimization class com.chloemlla.synapse.mobile.MainActivity {
     public <init>();
     public <methods>;
     protected <methods>;

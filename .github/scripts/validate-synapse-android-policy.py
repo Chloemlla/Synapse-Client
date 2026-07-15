@@ -30,7 +30,9 @@ for required in (
     "android/build.gradle.kts",
     "android/app/build.gradle.kts",
     "android/app/src/main/AndroidManifest.xml",
-    "android/app/src/main/java/com/synapse/mobile/MainActivity.kt",
+    "android/app/src/main/java/com/chloemlla/synapse/mobile/MainActivity.kt",
+    "android/app/src/legacy/AndroidManifest.xml",
+    "android/app/src/production/AndroidManifest.xml",
     "android/app/proguard-rules.pro",
     ".github/workflows/synapse-android.yml",
 ):
@@ -45,9 +47,15 @@ require_contains("android/app/src/main/AndroidManifest.xml", 'android:usesCleart
 require_contains("android/app/build.gradle.kts", "isMinifyEnabled = true")
 require_contains("android/app/build.gradle.kts", "isShrinkResources = true")
 require_contains("android/app/build.gradle.kts", 'getDefaultProguardFile("proguard-android-optimize.txt")')
-require_contains(".github/workflows/synapse-android.yml", "gradle testDebugUnitTest")
-require_contains(".github/workflows/synapse-android.yml", "gradle lintDebug")
-require_contains(".github/workflows/synapse-android.yml", "gradle assembleRelease")
+require_contains("android/app/build.gradle.kts", 'applicationId = "com.chloemlla.synapse.mobile"')
+require_contains("android/app/build.gradle.kts", 'applicationId = "com.synapse.mobile"')
+require_contains("android/app/build.gradle.kts", 'create("legacy")')
+require_contains("android/app/build.gradle.kts", 'create("production")')
+require_contains("android/app/src/legacy/AndroidManifest.xml", "com.synapse.mobile.migration")
+require_contains("android/app/src/legacy/AndroidManifest.xml", "MigrationConfigProvider")
+require_contains(".github/workflows/synapse-android.yml", "gradle testProductionDebugUnitTest")
+require_contains(".github/workflows/synapse-android.yml", "gradle lintProductionDebug")
+require_contains(".github/workflows/synapse-android.yml", "gradle assembleProductionRelease assembleLegacyRelease")
 
 forbidden_tokens = (
     "SYNAPSE_CERTIFICATE_PINS",

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="com.synapse.mobile.permission.READ_MIGRATION_CONFIG" />
+
+    <!-- Android 11+ package visibility for legacy config migration -->
+    <queries>
+        <package android:name="com.synapse.mobile" />
+        <provider android:authorities="com.synapse.mobile.migration" />
+    </queries>
+</manifest>

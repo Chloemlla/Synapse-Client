@@ -17,7 +17,7 @@ android/settings.gradle.kts
 android/build.gradle.kts
 android/app/build.gradle.kts
 android/app/src/main/AndroidManifest.xml
-android/app/src/main/java/com/synapse/mobile/**
+android/app/src/main/java/com/chloemlla/synapse/mobile/**
 ```
 
 Core Kotlin APIs:
@@ -310,6 +310,14 @@ Correct: `GET /api/auth/google/config?client=synapse-android` plus verification 
 ### Linux.do App Links auto-return
 
 - Declare verified HTTPS intent-filters for `/auth/linuxdo/callback` and `/auth/provider/bind` on the trusted API host (`manifestPlaceholders.synapseApiHost`).
-- Host Digital Asset Links at `https://{api-host}/.well-known/assetlinks.json` with package `com.synapse.mobile` and release cert SHA-256.
+- Host Digital Asset Links at `https://{api-host}/.well-known/assetlinks.json` with package `com.chloemlla.synapse.mobile` and release cert SHA-256.
 - Keep `synapse://linuxdo-callback` as manual fallback; keep paste-ticket UI when browser does not return.
 - Do not claim automatic return works until assetlinks is published and the release-signed APK is installed.
+
+### Package rename migration
+
+- Production `applicationId` / Kotlin package: `com.chloemlla.synapse.mobile`
+- Legacy transition `applicationId`: `com.synapse.mobile` (`legacy` product flavor)
+- Legacy flavor exports encrypted credentials + device id via signature-protected ContentProvider `com.synapse.mobile.migration`
+- Production flavor imports once on startup when local config is empty and the legacy package is installed
+- Never log migration payload contents (JWT / clientLoginToken)

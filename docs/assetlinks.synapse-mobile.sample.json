@@ -6,6 +6,19 @@
     ],
     "target": {
       "namespace": "android_app",
+      "package_name": "com.chloemlla.synapse.mobile",
+      "sha256_cert_fingerprints": [
+        "E9:D8:5A:D2:52:C3:8D:86:C6:E4:B2:A8:C0:49:B8:B5:A9:FA:79:AC:6E:BB:11:8C:94:0A:83:03:B6:96:39:98"
+      ]
+    }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
       "package_name": "com.synapse.mobile",
       "sha256_cert_fingerprints": [
         "E9:D8:5A:D2:52:C3:8D:86:C6:E4:B2:A8:C0:49:B8:B5:A9:FA:79:AC:6E:BB:11:8C:94:0A:83:03:B6:96:39:98"

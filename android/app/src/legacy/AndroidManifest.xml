@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Signature-protected export for package rename migration.
+      Only apps signed with the same certificate can hold/use this permission.
+    -->
+    <permission
+        android:name="com.synapse.mobile.permission.READ_MIGRATION_CONFIG"
+        android:protectionLevel="signature" />
+
+    <uses-permission android:name="com.synapse.mobile.permission.READ_MIGRATION_CONFIG" />
+
+    <application>
+        <provider
+            android:name=".core.migration.MigrationConfigProvider"
+            android:authorities="com.synapse.mobile.migration"
+            android:exported="true"
+            android:enabled="true"
+            android:grantUriPermissions="false"
+            android:permission="com.synapse.mobile.permission.READ_MIGRATION_CONFIG" />
+    </application>
+</manifest>
