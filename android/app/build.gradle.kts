@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -44,7 +46,7 @@ android {
 
         val synapseApiBaseUrl = providerString("SYNAPSE_API_BASE_URL", "https://tts.chloemlla.com")
         val synapseApiHost = runCatching {
-            java.net.URI(synapseApiBaseUrl).host
+            URI(synapseApiBaseUrl).host
         }.getOrNull()?.takeIf { it.isNotBlank() } ?: "tts.chloemlla.com"
 
         buildConfigField(

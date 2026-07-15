@@ -173,6 +173,7 @@ Networking contract:
 - The Android client is HTTPS-only and must reject non-HTTPS `SYNAPSE_API_BASE_URL` and QR `apiBaseUrl` values before network requests.
 - Do not add client-side certificate pinning, `CertificatePinner`, `CertificatePinPolicy`, `SYNAPSE_CERTIFICATE_PINS`, or `SYNAPSE_REQUIRE_CERTIFICATE_PINS` without a new explicit product/security decision and spec update.
 - GitHub Actions may supply `SYNAPSE_API_BASE_URL`; it must not require certificate pin secrets for verification or signed releases.
+- Derive App Link host placeholders from `SYNAPSE_API_BASE_URL` in `android/app/build.gradle.kts` with an explicit `import java.net.URI` and `URI(url).host`. Do not use `java.net.URI(...)` inside the script: Android Gradle Kotlin DSL can shadow `java` and fail script compilation (`Unresolved reference 'net'`).
 
 ### 4. Validation & Error Matrix
 
