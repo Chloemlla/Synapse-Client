@@ -48,7 +48,7 @@ StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active
 - Keep panels constrained for larger screens and scrollable for mobile screens; text must use `maxLines` and `TextOverflow.Ellipsis` where long account/device/token values appear.
 - Large summary/status regions must live inside the tab's scrollable content and switch to a compact form on low-height layouts such as landscape, so users can always scroll past them to the form/actions below.
 - Do not add visible instructional text about internal design choices, keyboard shortcuts, or implementation details.
-- Status and error banners must be dismissible when not loading; call a ViewModel clear-feedback action rather than leaving stale banners permanently visible.
+- Status and error banners must be dismissible when not loading; call a ViewModel clear-feedback action rather than leaving stale banners permanently visible. Failure banners may be multi-line: keep top alignment for error details and soft-wrap the full diagnostic text from `SynapseFailureMessage` / API error formatter.
 - Password fields must support show/hide via a trailing visibility icon; never log or mirror the password value elsewhere.
 - Destructive or high-impact actions (revoke token, clear credentials, confirm web QR login) require an explicit confirmation dialog that names the account and target site when applicable.
 - Token and challenge expiry timestamps shown in UI should use a local friendly format plus remaining-time bucket (minutes/hours/days), not raw ISO-8601 only.
@@ -131,4 +131,5 @@ BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
     }
 }
 ```
+
 

@@ -204,6 +204,8 @@ Networking contract:
 | Revoke succeeds with `revoked=true` | Clear local credentials |
 | Multiple accounts are stored | Display all accounts, allow switching the active account, and when confirming web login show an account picker dialog before `/challenge/confirm`; use only the selected/active account for QR confirmation |
 | API returns validation details in `details`, `errors`, or `issues` | Show the backend message plus field-level reasons, HTTP status, method, URL, and request field names; never echo request values such as passwords, JWTs, `clientLoginToken`, or `scanToken` |
+| Any login/session action throws | Format via `SynapseFailureMessage.from` so UI shows message + exception type + cause chain (+ HTTP status for `SynapseApiException`); config load failures use the same helper for `*ConfigError` |
+| Non-JSON / empty API error body | Append a short response body preview or `（空响应）`; still include method/URL/status |
 
 ### 5. Good/Base/Bad Cases
 
@@ -219,14 +221,15 @@ Two-factor: standard login returns `requires2FA` with `twoFactorType: ["TOTP", "
 
 Bad: app logs a full JWT or client login token, stores a Turnstile widget token, accepts HTTP `apiBaseUrl`, reintroduces client certificate pin secrets, overwrites an existing account when logging in as another user, or confirms a QR login without showing the target site.
 
-Error display: if an API response says only `输入验证失败` in the top-level message but includes nested field errors, the app must surface those field errors to the user. The diagnostic request context may include `POST https://.../api/...`, HTTP status, and submitted field names only; it must not include submitted values.
+Error display: if an API response says only `输入验证失败` in the top-level message but includes nested field errors, the app must surface those field errors to the user. The diagnostic request context may include `POST https://.../api/...`, HTTP status, and submitted field names only; it must not include submitted values. When nested field details are absent, include a short non-secret response body preview. All ViewModel/UI failure `error` and `*ConfigError` messages must be built through `SynapseFailureMessage` so the user also sees exception type, optional context label, HTTP status for `SynapseApiException`, and a truncated cause chain.
 
 ### 6. Tests Required
 
 - Unit test `SynapseQrPayload.parse` for valid payload, wrong scheme/host, missing fields, and non-HTTPS `apiBaseUrl`.
 - Unit test `SynapseSecureOkHttpFactory.create` for rejecting non-HTTPS API origins while constructing a normal HTTPS OkHttp client.
 - Static policy check must fail if Android source or workflow files reintroduce `CertificatePinner`, `CertificatePinPolicy`, `SYNAPSE_CERTIFICATE_PINS`, or `SYNAPSE_REQUIRE_CERTIFICATE_PINS`.
-- Unit test API error formatting with nested validation details and a negative assertion that request values are not echoed.
+- Unit test API error formatting with nested validation details, non-JSON body preview, and a negative assertion that request values are not echoed.
+- Unit test `SynapseFailureMessage` for exception type / HTTP status / cause-chain details and blank-message fallback.
 - Unit test Turnstile public config JSON mapping for `enabled`, `siteKey`, and disabled/no-site-key responses.
 - Unit test standard login JSON mapping for `requires2FA`, short-lived token fallback from `token`, `twoFactorType`, and `user`.
 - Unit test TOTP finish JSON mapping for `verified`, JWT `token`, and `message`.
@@ -331,3 +334,6 @@ App Links path matching:
 - Legacy flavor exports encrypted credentials + device id via signature-protected ContentProvider `com.synapse.mobile.migration`
 - Production flavor imports once on startup when local config is empty and the legacy package is installed
 - Never log migration payload contents (JWT / clientLoginToken)
+
+
+

@@ -75,7 +75,11 @@ internal fun TurnstileVerificationPanel(
                     title = "人机验证配置加载失败",
                     error = true,
                 )
-                Text(state.turnstileConfigError, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = state.turnstileConfigError.orEmpty(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    softWrap = true,
+                )
                 OutlinedButton(onClick = onReloadConfig) {
                     Icon(Icons.Outlined.Refresh, contentDescription = null)
                     Spacer(modifier = Modifier.size(8.dp))

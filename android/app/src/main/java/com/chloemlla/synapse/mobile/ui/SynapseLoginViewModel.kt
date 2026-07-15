@@ -8,6 +8,7 @@ import com.chloemlla.synapse.mobile.core.auth.LoginOutcome
 import com.chloemlla.synapse.mobile.core.auth.GoogleAuthConfig
 import com.chloemlla.synapse.mobile.core.auth.PasskeyAuthenticationOptions
 import com.chloemlla.synapse.mobile.core.auth.SynapseAuthRepository
+import com.chloemlla.synapse.mobile.core.auth.SynapseFailureMessage
 import com.chloemlla.synapse.mobile.core.auth.SynapsePasskeyJson
 import com.chloemlla.synapse.mobile.core.auth.SynapsePasskeyCredentialClient
 import com.chloemlla.synapse.mobile.core.auth.SynapseGoogleCredentialClient
@@ -88,7 +89,7 @@ class SynapseLoginViewModel(
             }
             .onFailure { error ->
                 mutableState.update {
-                    it.copy(error = error.message ?: error::class.java.simpleName)
+                    it.copy(error = SynapseFailureMessage.from(error))
                 }
             }
     }
@@ -168,7 +169,7 @@ class SynapseLoginViewModel(
                     mutableState.update {
                         it.copy(
                             turnstileConfigLoading = false,
-                            turnstileConfigError = error.message ?: "获取人机验证配置失败",
+                            turnstileConfigError = SynapseFailureMessage.from(error, fallback = "获取人机验证配置失败", context = "Turnstile public-config"),
                             turnstileToken = "",
                             turnstileVerified = false,
                             turnstileError = false,
@@ -228,7 +229,7 @@ class SynapseLoginViewModel(
         val parsedPayload = parseResult?.getOrNull()
         val qrPayloadError = when {
             value.isBlank() -> null
-            parsedPayload == null -> parseResult?.exceptionOrNull()?.message ?: "网页登录二维码 payload 格式无效。"
+            parsedPayload == null -> parseResult?.exceptionOrNull()?.let { SynapseFailureMessage.from(it, fallback = "网页登录二维码 payload 格式无效。", context = "QR payload parse") } ?: "网页登录二维码 payload 格式无效。"
             parsedPayload.isExpired -> "网页登录二维码已过期，请在网页端重新生成二维码。"
             else -> null
         }
@@ -482,7 +483,7 @@ class SynapseLoginViewModel(
         val assertion = runCatching {
             SynapsePasskeyJson.parseAuthenticationResponse(current.passkeyAssertionJson)
         }.getOrElse {
-            mutableState.update { state -> state.copy(error = it.message ?: "Passkey assertion response JSON 格式无效。") }
+            mutableState.update { state -> state.copy(error = SynapseFailureMessage.from(it, fallback = "Passkey assertion response JSON 格式无效。", context = "Passkey assertion parse")) }
             return
         }
         launchAction {
@@ -583,7 +584,7 @@ class SynapseLoginViewModel(
                                 scopes = null,
                             ),
                             linuxDoAuthConfigLoading = false,
-                            linuxDoAuthConfigError = error.message ?: error::class.java.simpleName,
+                            linuxDoAuthConfigError = SynapseFailureMessage.from(error, fallback = "获取 Linux.do 登录配置失败", context = "Linux.do config"),
                         )
                     }
                 }
@@ -629,7 +630,7 @@ class SynapseLoginViewModel(
             mutableState.update {
                 it.copy(
                     selectedTab = SynapseTab.Login,
-                    error = error.message ?: "无法解析 Linux.do 回调。",
+                    error = SynapseFailureMessage.from(error, fallback = "无法解析 Linux.do 回调。", context = "Linux.do callback parse"),
                 )
             }
             return
@@ -640,7 +641,14 @@ class SynapseLoginViewModel(
                 it.copy(
                     selectedTab = SynapseTab.Login,
                     linuxDoBrowserOpened = false,
-                    error = "Linux.do 授权失败：${payload.error}",
+                    error = SynapseFailureMessage.withDetails(
+                        summary = "Linux.do 授权失败",
+                        details = mapOf(
+                            "错误码" to payload.error,
+                            "intent" to payload.intent,
+                            "bindStatus" to payload.bindStatus,
+                        ),
+                    ),
                     status = "",
                 )
             }
@@ -652,7 +660,14 @@ class SynapseLoginViewModel(
                 it.copy(
                     selectedTab = SynapseTab.Login,
                     linuxDoBrowserOpened = false,
-                    error = "该 Linux.do 账号尚未绑定本地账号。请先在网页端完成绑定后再使用 App 登录。",
+                    error = SynapseFailureMessage.withDetails(
+                        summary = "该 Linux.do 账号尚未绑定本地账号。请先在网页端完成绑定后再使用 App 登录。",
+                        details = mapOf(
+                            "intent" to payload.intent,
+                            "bindStatus" to payload.bindStatus,
+                            "sessionToken" to if (payload.sessionToken.isNullOrBlank()) null else "已返回",
+                        ),
+                    ),
                     status = "",
                 )
             }
@@ -664,7 +679,14 @@ class SynapseLoginViewModel(
             mutableState.update {
                 it.copy(
                     selectedTab = SynapseTab.Login,
-                    error = "Linux.do 回调缺少登录票据 ticket。",
+                    error = SynapseFailureMessage.withDetails(
+                        summary = "Linux.do 回调缺少登录票据 ticket。",
+                        details = mapOf(
+                            "intent" to payload.intent,
+                            "bindStatus" to payload.bindStatus,
+                            "error" to payload.error,
+                        ),
+                    ),
                 )
             }
             return
@@ -722,7 +744,7 @@ class SynapseLoginViewModel(
                                 clientId = null,
                             ),
                             googleAuthConfigLoading = false,
-                            googleAuthConfigError = error.message ?: error::class.java.simpleName,
+                            googleAuthConfigError = SynapseFailureMessage.from(error, fallback = "获取 Google 登录配置失败", context = "Google config"),
                         )
                     }
                 }
@@ -877,7 +899,7 @@ class SynapseLoginViewModel(
                     it.copy(
                         showWebLoginAccountPicker = false,
                         credentials = repository.credentials(),
-                        error = error.message ?: error::class.java.simpleName,
+                        error = SynapseFailureMessage.from(error),
                     )
                 }
             }
@@ -940,7 +962,7 @@ class SynapseLoginViewModel(
                         next.copy(
                             loading = false,
                             credentials = repository.credentials(),
-                            error = error.message ?: error::class.java.simpleName,
+                            error = SynapseFailureMessage.from(error),
                         )
                     }
             }
@@ -996,3 +1018,6 @@ class SynapseLoginViewModel(
         }
     }
 }
+
+
+

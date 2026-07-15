@@ -145,7 +145,7 @@ class SynapseGoogleCredentialClient(
     private fun mapGetCredentialError(error: GetCredentialException): String {
         val type = error.type.orEmpty()
         val message = error.errorMessage?.toString()?.takeIf { it.isNotBlank() }
-        return when {
+        val summary = when {
             type.contains("CANCELED", ignoreCase = true) -> "已取消 Google 登录。"
             type.contains("NO_CREDENTIAL", ignoreCase = true) ->
                 "未找到可用的 Google 账号。请确认设备已登录 Google 账号。"
@@ -157,5 +157,13 @@ class SynapseGoogleCredentialClient(
             !message.isNullOrBlank() -> "Google 登录失败：$message"
             else -> "Google 登录失败：${error::class.java.simpleName}"
         }
+        return SynapseFailureMessage.withDetails(
+            summary = summary,
+            details = mapOf(
+                "异常类型" to error::class.java.name,
+                "Credential 错误类型" to type.takeIf { it.isNotBlank() },
+                "系统消息" to message,
+            ),
+        )
     }
 }

@@ -1,6 +1,7 @@
 package com.chloemlla.synapse.mobile.ui
 
 import com.chloemlla.synapse.mobile.core.auth.SynapsePasskeyCredentialClient
+import com.chloemlla.synapse.mobile.core.auth.SynapseFailureMessage
 import com.chloemlla.synapse.mobile.core.auth.SynapseGoogleCredentialClient
 
 import android.app.Activity
@@ -356,7 +357,7 @@ private fun StatusBanner(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 10.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = if (isError) Alignment.Top else Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             when {
@@ -376,6 +377,7 @@ private fun StatusBanner(
                 text = state.error ?: state.status.ifBlank { "处理中..." },
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium,
+                softWrap = true,
                 color = if (isError) {
                     MaterialTheme.colorScheme.onErrorContainer
                 } else {
@@ -719,7 +721,11 @@ private fun LoginPanel(
                             viewModel.markLinuxDoBrowserOpened()
                         }.onFailure { error ->
                             viewModel.reportLinuxDoBrowserOpenFailed(
-                                error.message ?: "无法打开浏览器进行 Linux.do 授权。",
+                                SynapseFailureMessage.from(
+                                    error = error,
+                                    fallback = "无法打开浏览器进行 Linux.do 授权。",
+                                    context = "Linux.do browser open",
+                                ),
                             )
                         }
                     },
@@ -1576,4 +1582,5 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is ContextWrapper -> baseContext.findActivity()
     else -> null
 }
+
 

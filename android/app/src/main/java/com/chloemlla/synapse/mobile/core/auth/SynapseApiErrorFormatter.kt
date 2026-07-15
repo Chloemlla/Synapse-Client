@@ -5,6 +5,7 @@ import org.json.JSONObject
 
 internal object SynapseApiErrorFormatter {
     private const val MAX_DETAIL_LINES = 8
+    private const val MAX_BODY_PREVIEW_CHARS = 400
 
     fun failureMessage(
         method: String,
@@ -32,6 +33,20 @@ internal object SynapseApiErrorFormatter {
                 appendLine("详细原因：")
                 details.forEach { detail ->
                     appendLine("- $detail")
+                }
+            } else if (json == null) {
+                val bodyPreview = responseText
+                    .trim()
+                    .replace("\r\n", "\n")
+                    .lineSequence()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .joinToString(" ")
+                    .take(MAX_BODY_PREVIEW_CHARS)
+                if (bodyPreview.isNotBlank()) {
+                    appendLine("响应摘要：$bodyPreview")
+                } else {
+                    appendLine("响应摘要：（空响应）")
                 }
             }
         }.trim()
@@ -136,3 +151,5 @@ internal object SynapseApiErrorFormatter {
             }?.takeIf { it.isNotBlank() }
         }
 }
+
+

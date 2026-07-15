@@ -46,4 +46,18 @@ class SynapseApiErrorFormatterTest {
         assertTrue(message.contains("请求字段：clientLoginToken, deviceId"))
         assertFalse(message.contains("sml_"))
     }
+
+    @Test
+    fun failureMessageIncludesNonJsonBodyPreview() {
+        val message = SynapseApiErrorFormatter.failureMessage(
+            method = "GET",
+            url = "https://tts.chloemlla.com/api/turnstile/public-config",
+            statusCode = 502,
+            requestFields = emptyList(),
+            responseText = "<html>Bad Gateway</html>",
+        )
+
+        assertTrue(message.contains("HTTP 状态：502"))
+        assertTrue(message.contains("响应摘要：<html>Bad Gateway</html>"))
+    }
 }

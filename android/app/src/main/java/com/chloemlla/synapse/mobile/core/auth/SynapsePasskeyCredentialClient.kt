@@ -67,7 +67,7 @@ class SynapsePasskeyCredentialClient(
     private fun mapGetCredentialError(error: GetCredentialException): String {
         val type = error.type.orEmpty()
         val message = error.errorMessage?.toString()?.takeIf { it.isNotBlank() }
-        return when {
+        val summary = when {
             type.contains("CANCELED", ignoreCase = true) -> "已取消 Passkey 验证。"
             type.contains("NO_CREDENTIAL", ignoreCase = true) ->
                 "未找到可用的 Passkey。请确认本机已保存该账号的通行密钥，且已完成 Digital Asset Links 关联。"
@@ -79,5 +79,13 @@ class SynapsePasskeyCredentialClient(
             !message.isNullOrBlank() -> "Passkey 验证失败：$message"
             else -> "Passkey 验证失败：${error::class.java.simpleName}"
         }
+        return SynapseFailureMessage.withDetails(
+            summary = summary,
+            details = mapOf(
+                "异常类型" to error::class.java.name,
+                "Credential 错误类型" to type.takeIf { it.isNotBlank() },
+                "系统消息" to message,
+            ),
+        )
     }
 }
