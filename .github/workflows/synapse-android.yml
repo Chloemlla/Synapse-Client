@@ -25,6 +25,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   verify:
@@ -68,13 +69,17 @@ jobs:
           SYNAPSE_ANDROID_VERSION_NAME: ${{ env.SYNAPSE_ANDROID_VERSION_NAME }}
           SYNAPSE_ANDROID_VERSION_CODE: ${{ env.SYNAPSE_ANDROID_VERSION_CODE }}
           SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
-        run: gradle :lumen-crash:test testProductionDebugUnitTest --no-daemon --warning-mode all
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.LUMEN_CRASH_READ_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+        run: gradle testProductionDebugUnitTest --no-daemon --warning-mode all
 
       - name: Run Android lint
         env:
           SYNAPSE_ANDROID_VERSION_NAME: ${{ env.SYNAPSE_ANDROID_VERSION_NAME }}
           SYNAPSE_ANDROID_VERSION_CODE: ${{ env.SYNAPSE_ANDROID_VERSION_CODE }}
           SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.LUMEN_CRASH_READ_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
         run: gradle lintProductionDebug --no-daemon --warning-mode all
 
       - name: Build release APK for verification
@@ -82,6 +87,8 @@ jobs:
           SYNAPSE_ANDROID_VERSION_NAME: ${{ env.SYNAPSE_ANDROID_VERSION_NAME }}
           SYNAPSE_ANDROID_VERSION_CODE: ${{ env.SYNAPSE_ANDROID_VERSION_CODE }}
           SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.LUMEN_CRASH_READ_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
         run: gradle assembleProductionRelease assembleLegacyRelease --no-daemon --warning-mode all
 
       - name: Upload verification reports
@@ -106,6 +113,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: read
     defaults:
       run:
         working-directory: android
@@ -178,6 +186,8 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.LUMEN_CRASH_READ_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
         run: gradle assembleProductionRelease assembleLegacyRelease --no-daemon --warning-mode all
 
       - name: Prepare release assets

@@ -25,7 +25,7 @@ android/app/src/main/java/com/chloemlla/synapse/mobile/ui/SynapseMobileTheme.kt
 android/app/src/main/java/com/chloemlla/synapse/mobile/ui/SynapseMobileApp.kt
 android/app/src/main/java/com/chloemlla/synapse/mobile/ui/TurnstileVerificationView.kt
 android/app/src/main/java/com/chloemlla/synapse/mobile/ui/QrScannerView.kt
-android/lumen-crash/src/main/java/com/chloemlla/lumen/crash/ui/LumenCrashReportScreen.kt
+com.chloemlla.lumen.crash.ui.LumenCrashReportScreen (GitHub Packages: com.chloemlla.lumen:lumen-crash)
 ```
 
 Reusable local patterns:
@@ -44,7 +44,7 @@ StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active
 - Buttons that perform clear actions should include an icon and short label via the local button-label pattern.
 - Authentication, QR, session, scanner, and destructive-action states must use semantic icons and colors.
 - Do not render full JWT, `clientLoginToken`, `scanToken`, Turnstile token, or password values. UI may show a token preview and may copy the full SML token only through an explicit copy action.
-- Crash reporting is provided by the vendored `:lumen-crash` SDK. Host product copy may override title/message/share subject via `LumenCrashConfig`; do not reintroduce app-local crash core/UI under `core/crash` or `ui/CrashReportScreen`. Sanitization of paths, content/file URIs, bearer credentials, token/password query parameters, and API-key formats is owned by the SDK before persistence or display.
+- Crash reporting is provided by the published `com.chloemlla.lumen:lumen-crash` SDK from GitHub Packages. Host product copy may override title/message/share subject via `LumenCrashConfig`; do not reintroduce app-local crash core/UI under `core/crash` or `ui/CrashReportScreen`. Sanitization of paths, content/file URIs, bearer credentials, token/password query parameters, and API-key formats is owned by the SDK before persistence or display.
 - Keep panels constrained for larger screens and scrollable for mobile screens; text must use `maxLines` and `TextOverflow.Ellipsis` where long account/device/token values appear.
 - Large summary/status regions must live inside the tab's scrollable content and switch to a compact form on low-height layouts such as landscape, so users can always scroll past them to the form/actions below.
 - Do not add visible instructional text about internal design choices, keyboard shortcuts, or implementation details.
@@ -85,7 +85,7 @@ Bad: a naked text-only button in a dense form, a raw `clientLoginToken` rendered
 
 - GitHub Actions must run Android unit tests, lint, and release assemble for Android UI changes.
 - Static review must confirm no raw JWT, `clientLoginToken`, `scanToken`, Turnstile token, or password value is rendered or logged.
-- Crash SDK integrity/export unit tests live under `android/lumen-crash/src/test`; host unit tests remain focused on auth/migration pure helpers.
+- Crash SDK integrity/export coverage is owned by the published `lumen-crash` package release pipeline; host unit tests remain focused on auth/migration pure helpers.
 - Static review must confirm new destructive actions have confirmation.
 - For ViewModel-driven behavior changes, add/update unit tests for pure state or parser behavior where feasible.
 

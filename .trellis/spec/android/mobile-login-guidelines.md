@@ -338,12 +338,14 @@ App Links path matching:
 
 ### Crash reporting
 
-- Use vendored Android library module `:lumen-crash` (`android/lumen-crash`) instead of app-local crash core/UI.
+- Consume published Maven coordinates `com.chloemlla.lumen:lumen-crash:0.1.0` from GitHub Packages (`https://maven.pkg.github.com/Chloemlla/Project-Lumen`).
+- Resolve credentials via `gpr.user`/`gpr.key` or `GITHUB_ACTOR`/`GITHUB_TOKEN`; CI prefers secret `LUMEN_CRASH_READ_PACKAGES_TOKEN` (token needs `read:packages`) with `GITHUB_TOKEN` fallback.
 - Install early from `SynapseApplication.attachBaseContext` via `LumenCrash.install(...)`.
 - Gate startup UI with `LumenCrash.loadPendingReport()` + `LumenCrashReportScreen`.
 - Keep host FileProvider authority `${applicationId}.fileprovider` and pass it through `LumenCrashConfig.fileProviderAuthority`.
 - Product copy overrides stay in host strings (`crash_report_title` / `crash_report_message` / `crash_report_share_subject`); library owns diagnostic UI copy.
 - Migration breadcrumbs use `com.chloemlla.lumen.crash.CrashBreadcrumbs`.
+- Do not vendor `android/lumen-crash` sources or reintroduce app-local crash core/UI.
 
 
 
