@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -25,6 +27,8 @@ class SynapseLiveUpdateNotifier(
 ) {
     private val appContext = context.applicationContext
     private val notificationManager = NotificationManagerCompat.from(appContext)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val autoDismissRunnables = mutableMapOf<Int, Runnable>()
 
     fun ensureChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -75,11 +79,15 @@ class SynapseLiveUpdateNotifier(
         if (!canPostNotifications()) return
 
         val notificationId = notificationIdFor(snapshot.kind)
+        cancelScheduledDismiss(notificationId)
         val contentIntent = PendingIntent.getActivity(
             appContext,
             notificationId,
             Intent(appContext, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(EXTRA_OPEN_TAB, snapshot.openTab)
+                putExtra(EXTRA_LIVE_UPDATE_KIND, snapshot.kind.name)
+                action = ACTION_OPEN_FROM_LIVE_UPDATE
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -90,12 +98,19 @@ class SynapseLiveUpdateNotifier(
             .setContentText(snapshot.text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(snapshot.text))
             .setContentIntent(contentIntent)
-            .setOnlyAlertOnce(true)
+            .setOnlyAlertOnce(!snapshot.alert)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(snapshot.ongoing)
             .setAutoCancel(!snapshot.ongoing)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(
+                if (snapshot.alert) {
+                    NotificationCompat.PRIORITY_DEFAULT
+                } else {
+                    NotificationCompat.PRIORITY_LOW
+                },
+            )
+            .setSilent(!snapshot.alert)
 
         snapshot.shortCriticalText
             ?.takeIf { it.isNotBlank() }
@@ -107,6 +122,10 @@ class SynapseLiveUpdateNotifier(
             builder.setUsesChronometer(false)
         }
 
+        if (snapshot.showIndeterminateProgress) {
+            builder.setProgress(0, 0, true)
+        }
+
         if (snapshot.requestPromoted && snapshot.ongoing) {
             applyRequestPromotedOngoing(builder)
         }
@@ -115,10 +134,16 @@ class SynapseLiveUpdateNotifier(
         runCatching {
             notificationManager.notify(notificationId, notification)
         }
+
+        snapshot.autoDismissAfterMs
+            ?.takeIf { it > 0L && !snapshot.ongoing }
+            ?.let { delayMs -> scheduleAutoDismiss(notificationId, delayMs) }
     }
 
     fun cancel(kind: SynapseLiveUpdateKind) {
-        notificationManager.cancel(notificationIdFor(kind))
+        val notificationId = notificationIdFor(kind)
+        cancelScheduledDismiss(notificationId)
+        notificationManager.cancel(notificationId)
     }
 
     fun cancelAll() {
@@ -128,6 +153,19 @@ class SynapseLiveUpdateNotifier(
     private fun notificationIdFor(kind: SynapseLiveUpdateKind): Int = when (kind) {
         SynapseLiveUpdateKind.WebQrLogin -> NOTIFICATION_ID_WEB_QR
         SynapseLiveUpdateKind.LinuxDoAuth -> NOTIFICATION_ID_LINUXDO
+    }
+
+    private fun scheduleAutoDismiss(notificationId: Int, delayMs: Long) {
+        val runnable = Runnable {
+            autoDismissRunnables.remove(notificationId)
+            notificationManager.cancel(notificationId)
+        }
+        autoDismissRunnables[notificationId] = runnable
+        mainHandler.postDelayed(runnable, delayMs)
+    }
+
+    private fun cancelScheduledDismiss(notificationId: Int) {
+        autoDismissRunnables.remove(notificationId)?.let(mainHandler::removeCallbacks)
     }
 
     private fun applyRequestPromotedOngoing(builder: NotificationCompat.Builder) {
@@ -163,6 +201,9 @@ class SynapseLiveUpdateNotifier(
 
     companion object {
         const val CHANNEL_ID = "synapse_live_updates"
+        const val ACTION_OPEN_FROM_LIVE_UPDATE = "com.chloemlla.synapse.mobile.action.OPEN_FROM_LIVE_UPDATE"
+        const val EXTRA_OPEN_TAB = "synapse_live_update_open_tab"
+        const val EXTRA_LIVE_UPDATE_KIND = "synapse_live_update_kind"
         private const val NOTIFICATION_ID_WEB_QR = 41001
         private const val NOTIFICATION_ID_LINUXDO = 41002
 

@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
 
         if (::viewModel.isInitialized) {
             intent.dataString?.let(viewModel::handleIncomingUri)
+            viewModel.consumeLiveUpdateIntent(intent)
         }
 
         setContent {
@@ -77,6 +78,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         if (::viewModel.isInitialized) {
             intent.dataString?.let(viewModel::handleIncomingUri)
+            viewModel.consumeLiveUpdateIntent(intent)
         }
     }
 

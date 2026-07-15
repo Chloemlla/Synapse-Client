@@ -358,6 +358,13 @@ App Links path matching:
   - Manifest includes non-runtime `POST_PROMOTED_NOTIFICATIONS` and runtime `POST_NOTIFICATIONS` (API 33+)
   - Channel importance must not be `IMPORTANCE_MIN`
   - No custom RemoteViews / colorized / group-summary notifications for Live Updates
+- UX rules:
+  - Prefer hostnames over full URLs in notification body
+  - Keep chip text short (`待确认` / countdown / `确认中` / `完成` / `失败`)
+  - Intermediate updates are silent (`onlyAlertOnce` / low priority); terminal success/failure may alert once
+  - Terminal success auto-dismiss ~4s, failure ~8s
+  - Notification tap opens the matching tab (`qr` / `login` / `session`)
+  - Failure copy is first-line only and redacts token-like values
 - Do not use Live Updates for terminal history, idle session status, or permanent presence.
 - Never put JWT / clientLoginToken / passwords into notification text.
 

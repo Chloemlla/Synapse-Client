@@ -1,5 +1,6 @@
 package com.chloemlla.synapse.mobile.ui
 
+import android.content.Intent
 import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -18,6 +19,8 @@ import com.chloemlla.synapse.mobile.core.auth.SynapseQrPayload
 import com.chloemlla.synapse.mobile.core.notify.SynapseLiveUpdateCopy
 import com.chloemlla.synapse.mobile.core.notify.SynapseLiveUpdateKind
 import com.chloemlla.synapse.mobile.core.notify.SynapseLiveUpdateNotifier
+import com.chloemlla.synapse.mobile.core.notify.SynapseLiveUpdateNotifier.Companion.ACTION_OPEN_FROM_LIVE_UPDATE
+import com.chloemlla.synapse.mobile.core.notify.SynapseLiveUpdateNotifier.Companion.EXTRA_OPEN_TAB
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -60,6 +63,33 @@ class SynapseLoginViewModel(
 
     fun clearFeedback() {
         mutableState.update { it.copy(status = "", error = null) }
+    }
+
+    fun consumeLiveUpdateIntent(intent: Intent?) {
+        if (intent == null) return
+        if (intent.action != ACTION_OPEN_FROM_LIVE_UPDATE &&
+            !intent.hasExtra(EXTRA_OPEN_TAB)
+        ) {
+            return
+        }
+        val tab = when (intent.getStringExtra(EXTRA_OPEN_TAB)?.lowercase()) {
+            "qr" -> SynapseTab.Qr
+            "session" -> SynapseTab.Session
+            "login" -> SynapseTab.Login
+            else -> null
+        }
+        if (tab != null) {
+            mutableState.update {
+                it.copy(
+                    selectedTab = tab,
+                    error = null,
+                )
+            }
+        }
+        intent.removeExtra(EXTRA_OPEN_TAB)
+        if (intent.action == ACTION_OPEN_FROM_LIVE_UPDATE) {
+            intent.action = null
+        }
     }
 
     fun clearQrPayload() {
