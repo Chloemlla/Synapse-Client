@@ -16,6 +16,8 @@ import java.net.URLDecoder
 object SynapseLinuxDoCallbackParser {
     const val APP_SCHEME = "synapse"
     const val APP_HOST = "linuxdo-callback"
+    private const val FRONTEND_CALLBACK_PATH = "/auth/linuxdo/callback"
+    private const val PROVIDER_BIND_PATH = "/auth/provider/bind"
 
     fun isLinuxDoRelated(raw: String): Boolean {
         val trimmed = raw.trim()
@@ -27,8 +29,8 @@ object SynapseLinuxDoCallbackParser {
                     uri.host.equals(APP_HOST, ignoreCase = true) -> true
                 uri.scheme.equals("https", ignoreCase = true) &&
                     (
-                        uri.path.orEmpty().contains("/auth/linuxdo/callback") ||
-                            uri.path.orEmpty().contains("/auth/provider/bind")
+                        isFrontendCallbackPath(uri.path) ||
+                            isProviderBindPath(uri.path)
                         ) -> true
                 else -> false
             }
@@ -55,7 +57,7 @@ object SynapseLinuxDoCallbackParser {
         val mergeToken = query["mergeToken"]?.takeIf { it.isNotBlank() }
 
         val path = uri.path.orEmpty()
-        val isProviderBindPath = path.contains("/auth/provider/bind")
+        val isProviderBindPath = isProviderBindPath(path)
         val resolvedIntent = when {
             !intent.isNullOrBlank() -> intent
             isProviderBindPath || !sessionToken.isNullOrBlank() -> "bind"
@@ -70,6 +72,23 @@ object SynapseLinuxDoCallbackParser {
             bindStatus = bindStatus,
             mergeToken = mergeToken,
         )
+    }
+
+    private fun isFrontendCallbackPath(path: String?): Boolean {
+        val normalized = normalizePath(path)
+        return normalized == FRONTEND_CALLBACK_PATH ||
+            normalized.startsWith("$FRONTEND_CALLBACK_PATH/")
+    }
+
+    private fun isProviderBindPath(path: String?): Boolean {
+        val normalized = normalizePath(path)
+        return normalized == PROVIDER_BIND_PATH ||
+            normalized.startsWith("$PROVIDER_BIND_PATH/")
+    }
+
+    private fun normalizePath(path: String?): String {
+        val raw = path.orEmpty().ifBlank { "/" }
+        return if (raw.length > 1 && raw.endsWith('/')) raw.dropLast(1) else raw
     }
 
     private fun parseQuery(rawQuery: String): Map<String, String> {

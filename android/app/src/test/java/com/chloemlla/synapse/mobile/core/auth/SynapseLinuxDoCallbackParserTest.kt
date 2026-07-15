@@ -59,5 +59,10 @@ class SynapseLinuxDoCallbackParserTest {
                 "https://tts.chloemlla.com/auth/linuxdo/callback?ticket=x",
             ),
         )
+        assertFalse(
+            SynapseLinuxDoCallbackParser.isLinuxDoRelated(
+                "https://tts.chloemlla.com/api/auth/linuxdo/callback?code=x&state=y",
+            ),
+        )
     }
 }

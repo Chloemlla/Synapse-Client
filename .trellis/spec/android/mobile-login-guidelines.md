@@ -313,6 +313,10 @@ Correct: `GET /api/auth/google/config?client=synapse-android` plus verification 
 - Use `java.net.URI` + query map decoding (`URLDecoder`), matching `SynapseQrPayloadParser`.
 - Do not call `android.net.Uri.parse` / `getQueryParameter` in this helper; Robolectric-free unit tests will fail with `Method parse in android.net.Uri not mocked`.
 - Unit tests must cover deep-link ticket, HTTPS callback ticket, provider-bind session, error query, and unrelated HTTPS rejection.
+
+App Links path matching:
+- Treat only frontend SPA paths `/auth/linuxdo/callback` and `/auth/provider/bind` as Linux.do related.
+- Do not treat backend OAuth path `/api/auth/linuxdo/callback` as an app-owned completion URL; that path is the OAuth redirect_uri and may 302.
 ### Linux.do App Links auto-return
 
 - Declare verified HTTPS intent-filters for `/auth/linuxdo/callback` and `/auth/provider/bind` on the trusted API host (`manifestPlaceholders.synapseApiHost`).
