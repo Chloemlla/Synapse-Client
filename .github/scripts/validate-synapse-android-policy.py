@@ -62,6 +62,11 @@ require_contains("android/app/src/main/AndroidManifest.xml", "POST_NOTIFICATIONS
 require_contains("android/app/src/main/java/com/chloemlla/synapse/mobile/core/notify/SynapseLiveUpdateNotifier.kt", "setRequestPromotedOngoing")
 require_contains("android/app/src/main/java/com/chloemlla/synapse/mobile/ui/SynapseLoginViewModel.kt", "liveUpdateNotifier")
 
+require_contains("android/app/proguard-rules.pro", "Lumen Crash SDK minify exemption")
+require_contains("android/app/proguard-rules.pro", "com.chloemlla.lumen.crash.CrashAuthorAttribution")
+require_contains("android/app/proguard-rules.pro", "-keep class com.chloemlla.lumen.crash.** { *; }")
+
+
 
 require_contains("android/app/src/legacy/AndroidManifest.xml", "com.synapse.mobile.migration")
 require_contains("android/app/src/legacy/AndroidManifest.xml", "MigrationConfigProvider")

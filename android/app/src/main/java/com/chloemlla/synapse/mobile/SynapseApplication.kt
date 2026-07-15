@@ -12,24 +12,35 @@ import com.tencent.mmkv.MMKV
 
 class SynapseApplication : Application() {
     val liveUpdateNotifier: SynapseLiveUpdateNotifier by lazy { SynapseLiveUpdateNotifier(this) }
+    @Volatile
+    var lumenCrashAvailable: Boolean = false
+        private set
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
-        installLumenCrashSdk()
-        CrashBreadcrumbs.record("Application.attachBaseContext")
+        // Crash SDK must never prevent process start.
+        runCatching {
+            installLumenCrashSdk()
+            recordBreadcrumb("Application.attachBaseContext")
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
-        installLumenCrashSdk()
-        CrashBreadcrumbs.record("Application.onCreate")
+        runCatching {
+            installLumenCrashSdk()
+            recordBreadcrumb("Application.onCreate")
+        }
         initializeMmkvOrRecordCrash()
         migrateLegacyPackageConfigOrRecordCrash()
-        liveUpdateNotifier.ensureChannels()
+        runCatching { liveUpdateNotifier.ensureChannels() }
     }
 
     private fun installLumenCrashSdk() {
-        if (LumenCrash.isInstalled()) return
+        if (LumenCrash.isInstalled()) {
+            lumenCrashAvailable = true
+            return
+        }
         val appName = runCatching { getString(R.string.app_name) }.getOrDefault("Synapse Mobile")
         LumenCrash.install(
             this,
@@ -44,30 +55,60 @@ class SynapseApplication : Application() {
                 reportMessage = runCatching { getString(R.string.crash_report_message) }.getOrNull(),
             ),
         )
+        lumenCrashAvailable = LumenCrash.isInstalled()
     }
 
     private fun initializeMmkvOrRecordCrash() {
         runCatching { MMKV.initialize(this) }
-            .onSuccess { CrashBreadcrumbs.record("MMKV initialized") }
+            .onSuccess { recordBreadcrumb("MMKV initialized") }
             .onFailure(::recordCrash)
     }
 
     private fun migrateLegacyPackageConfigOrRecordCrash() {
         runCatching { LegacyPackageConfigMigrator(this).migrateIfNeeded() }
             .onSuccess { result ->
-                CrashBreadcrumbs.record("Legacy package migration: ${result::class.java.simpleName}")
+                recordBreadcrumb("Legacy package migration: ${result::class.java.simpleName}")
             }
             .onFailure { error ->
-                CrashBreadcrumbs.record("Legacy package migration crashed: ${error::class.java.simpleName}")
+                recordBreadcrumb("Legacy package migration crashed: ${error::class.java.simpleName}")
                 // Do not block app startup for migration failures.
             }
     }
 
     fun recordStartupCrash(throwable: Throwable): CrashReport {
         return recordCrash(throwable)
+            ?: CrashReport(
+                reportId = "startup-fallback",
+                crashedAtMillis = System.currentTimeMillis(),
+                crashedAtText = System.currentTimeMillis().toString(),
+                exceptionType = throwable::class.java.name,
+                rootCause = throwable.message ?: throwable::class.java.name,
+                threadName = Thread.currentThread().name,
+                processName = packageName,
+                systemInfo = "LumenCrash unavailable during startup recording",
+                stackTrace = throwable.stackTraceToString(),
+            )
     }
 
-    fun recordCrash(throwable: Throwable): CrashReport {
-        return LumenCrash.record(throwable)
+    fun recordCrash(throwable: Throwable): CrashReport? {
+        if (!lumenCrashAvailable && !runCatching { LumenCrash.isInstalled() }.getOrDefault(false)) {
+            return null
+        }
+        return runCatching { LumenCrash.record(throwable) }.getOrNull()
+    }
+
+    fun loadPendingCrashReport(): CrashReport? {
+        if (!lumenCrashAvailable && !runCatching { LumenCrash.isInstalled() }.getOrDefault(false)) {
+            return null
+        }
+        return runCatching { LumenCrash.loadPendingReport() }.getOrNull()
+    }
+
+    fun clearPendingCrashReport() {
+        runCatching { LumenCrash.clearPendingReport() }
+    }
+
+    private fun recordBreadcrumb(event: String) {
+        runCatching { CrashBreadcrumbs.record(event) }
     }
 }

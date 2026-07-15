@@ -15,7 +15,6 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import com.chloemlla.lumen.crash.CrashBreadcrumbs
-import com.chloemlla.lumen.crash.LumenCrash
 import com.chloemlla.lumen.crash.ui.LumenCrashReportScreen
 import com.chloemlla.synapse.mobile.core.auth.SynapseAuthRepository
 import com.chloemlla.synapse.mobile.ui.SynapseLoginViewModel
@@ -31,18 +30,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        CrashBreadcrumbs.record("MainActivity.onCreate")
+        runCatching { CrashBreadcrumbs.record("MainActivity.onCreate") }
         maybeRequestNotificationPermission()
 
         val app = application as SynapseApplication
-        var initialStartupReport = LumenCrash.loadPendingReport()
+        var initialStartupReport = app.loadPendingCrashReport()
         val initialViewModel = if (initialStartupReport == null) {
             createSynapseViewModel(app)?.also { viewModel = it }
         } else {
             null
         }
         if (initialStartupReport == null && initialViewModel == null) {
-            initialStartupReport = LumenCrash.loadPendingReport()
+            initialStartupReport = app.loadPendingCrashReport()
         }
 
         if (::viewModel.isInitialized) {
@@ -55,14 +54,32 @@ class MainActivity : ComponentActivity() {
             SynapseMobileTheme {
                 val report = startupReport
                 if (report != null) {
-                    LumenCrashReportScreen(
-                        report = report,
-                        onContinue = {
-                            LumenCrash.clearPendingReport()
-                            startupReport = null
-                            if (initialViewModel == null) recreate()
-                        },
-                    )
+                    // Prefer the SDK crash UI. If it cannot render (e.g. fail-closed integrity),
+                    // clear the pending report and fall back to the normal app surface.
+                    val showCrashUi = remember(report.reportId) {
+                        runCatching {
+                            // Touch a cheap SDK path so integrity failures are caught before composition.
+                            report.toClipboardText()
+                            true
+                        }.getOrElse {
+                            app.clearPendingCrashReport()
+                            false
+                        }
+                    }
+                    if (showCrashUi) {
+                        LumenCrashReportScreen(
+                            report = report,
+                            onContinue = {
+                                app.clearPendingCrashReport()
+                                startupReport = null
+                                if (initialViewModel == null) recreate()
+                            },
+                        )
+                    } else if (initialViewModel != null) {
+                        SynapseMobileApp(viewModel = initialViewModel)
+                    } else {
+                        recreate()
+                    }
                 } else {
                     initialViewModel?.let { readyViewModel ->
                         SynapseMobileApp(viewModel = readyViewModel)
@@ -74,7 +91,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        CrashBreadcrumbs.record("MainActivity.onNewIntent")
+        runCatching { CrashBreadcrumbs.record("MainActivity.onNewIntent") }
         setIntent(intent)
         if (::viewModel.isInitialized) {
             intent.dataString?.let(viewModel::handleIncomingUri)

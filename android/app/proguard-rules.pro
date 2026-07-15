@@ -68,3 +68,39 @@
 # Google Identity / SIWG Credential Manager helpers
 -keep class com.google.android.libraries.identity.googleid.** { *; }
 -dontwarn com.google.android.libraries.identity.googleid.**
+
+############################################################
+# Lumen Crash SDK minify exemption
+# Artifact: com.chloemlla.lumen:lumen-crash
+# Required for third-party hosts with isMinifyEnabled=true.
+# Prevents release white-screen / fail-closed author integrity.
+############################################################
+
+# Required: author attribution + integrity checks
+-keep class com.chloemlla.lumen.crash.CrashAuthorAttribution {
+    public static final java.lang.String *;
+    public static *** payload();
+}
+-keepclassmembers class com.chloemlla.lumen.crash.CrashAuthorAttribution {
+    public static final java.lang.String *;
+}
+-keep class com.chloemlla.lumen.crash.AuthorIntegrity {
+    public static *** verifyOrThrow(...);
+    public static *** fingerprintHex();
+    public static *** verifiedAuthorBlock();
+}
+-keep class com.chloemlla.lumen.crash.AuthorBlock { *; }
+
+# Required backup: keep public SDK API used by host integration
+-keep class com.chloemlla.lumen.crash.LumenCrash { *; }
+-keep class com.chloemlla.lumen.crash.LumenCrashConfig { *; }
+-keep class com.chloemlla.lumen.crash.CrashReport { *; }
+-keep class com.chloemlla.lumen.crash.CrashAppInfo { *; }
+-keep class com.chloemlla.lumen.crash.CrashReportStore { *; }
+-keep class com.chloemlla.lumen.crash.CrashBreadcrumbs { *; }
+-keep class com.chloemlla.lumen.crash.ui.LumenCrashReportScreenKt { *; }
+
+# Package-level exemption (safe default for third-party hosts)
+-keep class com.chloemlla.lumen.crash.** { *; }
+-keepclassmembers class com.chloemlla.lumen.crash.** { *; }
+-dontwarn com.chloemlla.lumen.crash.**

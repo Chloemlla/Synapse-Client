@@ -43,6 +43,8 @@ Required Synapse runtime boundary rules:
 
 The published `com.chloemlla.lumen:lumen-crash` package ships consumer ProGuard rules for author attribution integrity. Prefer those consumer rules over copying broad crash-package keeps into the app module.
 
+Additionally, because the host enables release minify, keep an explicit third-party exemption block for `com.chloemlla.lumen.crash.**` in `android/app/proguard-rules.pro` (author constants, integrity entry points, public API, package-level keep). Missing this can white-screen or fail-closed at startup.
+
 ### 3. Contracts
 
 - Release builds must keep `isMinifyEnabled = true`, `isShrinkResources = true`, and `proguard-android-optimize.txt`.
