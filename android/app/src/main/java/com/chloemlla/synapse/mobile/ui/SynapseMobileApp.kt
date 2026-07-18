@@ -735,38 +735,49 @@ private fun LoginPanel(
                     ButtonLabel(Icons.Outlined.AccountCircle, "使用 Linux.do 登录")
                 }
                 Text(
-                    text = "将打开系统浏览器访问 Happy-TTS /api/auth/linuxdo/start。授权完成后，若站点已配置 Digital Asset Links，会经 App Links 自动回到本应用并交换 ticket；否则请粘贴回调链接或 ticket。",
+                    text = if (state.linuxDoBrowserOpened) {
+                        "已打开授权页。完成后若未自动回 App，请粘贴回调链接或 ticket。"
+                    } else {
+                        "将打开系统浏览器访问 Happy-TTS /api/auth/linuxdo/start。授权完成后优先经 App Links 自动回 App；也可随时在下方粘贴回调链接或 ticket。"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (state.linuxDoBrowserOpened) {
-                    var linuxDoCallbackInput by rememberSaveable { mutableStateOf("") }
-                    OutlinedTextField(
-                        value = linuxDoCallbackInput,
-                        onValueChange = { linuxDoCallbackInput = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = false,
-                        minLines = 2,
-                        label = { Text("Linux.do 回调链接或 ticket") },
-                        supportingText = {
-                            Text("可粘贴完整回调 URL（含 ticket=）或仅粘贴 ticket 字符串。")
-                        },
-                    )
-                    OutlinedButton(
-                        onClick = {
-                            val raw = linuxDoCallbackInput.trim()
-                            if (raw.isBlank()) return@OutlinedButton
-                            if (raw.contains("://") || raw.contains("ticket=")) {
-                                viewModel.completeLinuxDoFromCallback(raw)
-                            } else {
-                                viewModel.exchangeLinuxDoTicket(raw)
-                            }
-                        },
-                        enabled = !state.loading && linuxDoCallbackInput.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        ButtonLabel(Icons.Outlined.Key, "提交 Linux.do 登录票据")
-                    }
+                // Always keep paste entry visible: App Links may fail, browser may open
+                // outside this process, and users may already hold a ticket.
+                var linuxDoCallbackInput by rememberSaveable { mutableStateOf("") }
+                OutlinedTextField(
+                    value = linuxDoCallbackInput,
+                    onValueChange = { linuxDoCallbackInput = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = false,
+                    minLines = 2,
+                    enabled = !state.loading,
+                    label = { Text("Linux.do 回调链接或 ticket") },
+                    supportingText = {
+                        Text("可粘贴完整回调 URL（含 ticket=）、裸 query（ticket=...），或仅粘贴 ticket 字符串。")
+                    },
+                )
+                OutlinedButton(
+                    onClick = {
+                        val raw = linuxDoCallbackInput.trim()
+                        if (raw.isBlank()) return@OutlinedButton
+                        if (
+                            raw.contains("://") ||
+                            raw.contains("ticket=") ||
+                            raw.contains("error=") ||
+                            raw.contains("sessionToken=") ||
+                            raw.startsWith("?")
+                        ) {
+                            viewModel.completeLinuxDoFromCallback(raw)
+                        } else {
+                            viewModel.exchangeLinuxDoTicket(raw)
+                        }
+                    },
+                    enabled = !state.loading && linuxDoCallbackInput.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    ButtonLabel(Icons.Outlined.Key, "提交 Linux.do 登录票据")
                 }
             }
         }
