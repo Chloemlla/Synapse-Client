@@ -29,8 +29,10 @@ class SynapseGoogleCredentialClient(
     private val credentialManager: CredentialManager = CredentialManager.create(context.applicationContext),
 ) {
     /**
-     * Tries authorized Google accounts first (bottom sheet), then falls back to
-     * the full Sign in with Google button flow when no saved credential is ready.
+     * Tries authorized Google accounts first (bottom sheet), then widens to all
+     * device Google accounts, then falls back to the full Sign in with Google
+     * button flow. Account reauth failures (code 16) are treated as recoverable
+     * for earlier steps so a stale authorized account does not hard-fail SIWG.
      */
     suspend fun getGoogleIdToken(
         activity: Activity,
@@ -43,46 +45,78 @@ class SynapseGoogleCredentialClient(
         val cleanClientId = serverClientId.trim()
         require(cleanClientId.isNotBlank()) { "缺少 Google serverClientId。" }
 
-        try {
-            try {
-                requestGoogleIdToken(
-                    activity = activity,
-                    serverClientId = cleanClientId,
-                    filterByAuthorizedAccounts = filterByAuthorizedAccounts,
-                    autoSelectEnabled = false,
-                )
-            } catch (error: NoCredentialException) {
-                if (filterByAuthorizedAccounts) {
-                    try {
-                        requestGoogleIdToken(
-                            activity = activity,
-                            serverClientId = cleanClientId,
-                            filterByAuthorizedAccounts = false,
-                            autoSelectEnabled = false,
-                        )
-                    } catch (inner: NoCredentialException) {
-                        requestSignInWithGoogleButton(
-                            activity = activity,
-                            serverClientId = cleanClientId,
-                        )
-                    }
-                } else {
-                    requestSignInWithGoogleButton(
+        val steps = buildList<suspend () -> String> {
+            if (filterByAuthorizedAccounts) {
+                add {
+                    requestGoogleIdToken(
                         activity = activity,
                         serverClientId = cleanClientId,
+                        filterByAuthorizedAccounts = true,
+                        autoSelectEnabled = false,
                     )
                 }
             }
-        } catch (error: GetCredentialCancellationException) {
-            throw IllegalStateException(mapCancellationError(error, actionLabel = "Google 登录"), error)
-        } catch (error: NoCredentialException) {
+            add {
+                requestGoogleIdToken(
+                    activity = activity,
+                    serverClientId = cleanClientId,
+                    filterByAuthorizedAccounts = false,
+                    autoSelectEnabled = false,
+                )
+            }
+            add {
+                requestSignInWithGoogleButton(
+                    activity = activity,
+                    serverClientId = cleanClientId,
+                )
+            }
+        }
+
+        var lastRecoverableError: GetCredentialException? = null
+        for ((index, requestStep) in steps.withIndex()) {
+            val hasRemainingFallback = index < steps.lastIndex
+            try {
+                return@withContext requestStep()
+            } catch (error: NoCredentialException) {
+                lastRecoverableError = error
+                if (!hasRemainingFallback) {
+                    throw IllegalStateException(
+                        "未找到可用的 Google 账号。请确认设备已登录 Google 账号，并安装/更新 Google Play 服务。",
+                        error,
+                    )
+                }
+            } catch (error: GetCredentialCancellationException) {
+                val systemMessage = error.errorMessage?.toString()
+                if (
+                    SynapseCredentialErrorMapper.shouldRetryAfterCancellation(
+                        systemMessage = systemMessage,
+                        hasRemainingFallback = hasRemainingFallback,
+                    )
+                ) {
+                    lastRecoverableError = error
+                    continue
+                }
+                throw IllegalStateException(mapCancellationError(error, actionLabel = "Google 登录"), error)
+            } catch (error: GetCredentialException) {
+                throw IllegalStateException(mapGetCredentialError(error), error)
+            }
+        }
+
+        // Defensive: loop always returns or throws when steps is non-empty.
+        val fallbackError = lastRecoverableError
+        if (fallbackError is GetCredentialCancellationException) {
+            throw IllegalStateException(
+                mapCancellationError(fallbackError, actionLabel = "Google 登录"),
+                fallbackError,
+            )
+        }
+        if (fallbackError is NoCredentialException) {
             throw IllegalStateException(
                 "未找到可用的 Google 账号。请确认设备已登录 Google 账号，并安装/更新 Google Play 服务。",
-                error,
+                fallbackError,
             )
-        } catch (error: GetCredentialException) {
-            throw IllegalStateException(mapGetCredentialError(error), error)
         }
+        throw IllegalStateException("Google 登录失败：未返回凭据。", fallbackError)
     }
 
     private suspend fun requestGoogleIdToken(

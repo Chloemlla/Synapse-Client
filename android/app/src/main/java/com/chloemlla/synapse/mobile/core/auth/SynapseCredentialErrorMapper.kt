@@ -5,6 +5,19 @@ package com.chloemlla.synapse.mobile.core.auth
  * Pure JVM so unit tests do not need Android instrumentation.
  */
 internal object SynapseCredentialErrorMapper {
+    /**
+     * Account reauth failures are often recoverable by widening the Google account picker
+     * (drop authorized-only filter) or switching to the full Sign in with Google button.
+     * Real user cancellations must not auto-retry.
+     */
+    fun shouldRetryAfterCancellation(
+        systemMessage: String?,
+        hasRemainingFallback: Boolean,
+    ): Boolean {
+        if (!hasRemainingFallback) return false
+        return isAccountReauthFailure(systemMessage.orEmpty())
+    }
+
     fun cancellationSummary(
         systemMessage: String?,
         actionLabel: String,

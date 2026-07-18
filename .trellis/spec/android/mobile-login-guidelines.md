@@ -194,7 +194,8 @@ Networking contract:
 | Google config returns enabled=true with clientId | Show SIWG entry; use Credential Manager with that serverClientId |
 | Google bind-session returns JWT | Save JWT encrypted, issue client login token |
 | Google bind-session returns requiresBinding=true | Fall back to POST /api/auth/google for mobile auto upsert |
-| Google Credential Manager returns cancellation with `Account reauth failed` / code 16 | Do not show plain “已取消”; tell the user to re-login the Google account in system settings or switch accounts; still include exception type and system message |
+| Google Credential Manager returns cancellation with `Account reauth failed` / code 16 on an intermediate Google ID step | Treat as recoverable: widen from authorized-only accounts to all accounts, then to `GetSignInWithGoogleOption`; only if every fallback also fails, surface re-login guidance instead of plain “已取消”, and still include exception type and system message |
+| Google Credential Manager returns a real user cancellation | Stop immediately with “已取消”; do not auto-advance to the next Google account picker |
 | Google login disabled/unconfigured | Hide or disable SIWG entry; allow password/passkey login |
 | Linux.do config enabled | Show browser OAuth entry |
 | Linux.do exchange returns JWT | Save JWT encrypted, issue client login token |

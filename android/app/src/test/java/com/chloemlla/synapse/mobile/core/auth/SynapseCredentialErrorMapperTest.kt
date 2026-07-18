@@ -45,4 +45,32 @@ class SynapseCredentialErrorMapperTest {
         )
         assertTrue(summary.contains("未完成：provider interrupted"))
     }
+
+    @Test
+    fun accountReauthCancellationRetriesWhileFallbackRemains() {
+        assertTrue(
+            SynapseCredentialErrorMapper.shouldRetryAfterCancellation(
+                systemMessage = "[16] Account reauth failed.",
+                hasRemainingFallback = true,
+            ),
+        )
+        assertFalse(
+            SynapseCredentialErrorMapper.shouldRetryAfterCancellation(
+                systemMessage = "[16] Account reauth failed.",
+                hasRemainingFallback = false,
+            ),
+        )
+        assertFalse(
+            SynapseCredentialErrorMapper.shouldRetryAfterCancellation(
+                systemMessage = "activity is cancelled by the user.",
+                hasRemainingFallback = true,
+            ),
+        )
+        assertFalse(
+            SynapseCredentialErrorMapper.shouldRetryAfterCancellation(
+                systemMessage = null,
+                hasRemainingFallback = true,
+            ),
+        )
+    }
 }

@@ -264,7 +264,7 @@ synapse://mobile-login?sessionId=<sessionId>&scanToken=<scanToken>&apiBaseUrl=<a
 推荐流程：
 
 1. 调用 `GET /api/auth/google/config?client=synapse-android` 读取是否启用与 Web `clientId`（即 Credential Manager 的 `serverClientId`）；服务端未配置专用值时回退主站 Client ID。
-2. 使用 `GetGoogleIdOption`（可先 `filterByAuthorizedAccounts=true`，无凭据再放宽或改用 `GetSignInWithGoogleOption`）调用 `CredentialManager.getCredential()`。
+2. 使用 `GetGoogleIdOption`（可先 `filterByAuthorizedAccounts=true`，无凭据再放宽或改用 `GetSignInWithGoogleOption`）调用 `CredentialManager.getCredential()`。若某一步返回 `Account reauth failed` / code 16，应继续下一档账号选择而不是立刻失败；真正的用户取消则立即停止。
 3. 从 `GoogleIdTokenCredential` 取出 `idToken`。
 4. 优先 `POST /api/auth/google/bind-session`（与网页端一致）。若返回 `requiresBinding=true`，移动端无绑定 UI 时改为 `POST /api/auth/google` 完成自动建号/关联。
 5. 收到正式 JWT 后加密保存，并立即调用 `/api/auth/mobile-login/client-token/issue`。
