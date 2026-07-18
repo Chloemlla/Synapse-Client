@@ -736,9 +736,9 @@ private fun LoginPanel(
                 }
                 Text(
                     text = if (state.linuxDoBrowserOpened) {
-                        "已打开授权页。完成后若未自动回 App，请粘贴回调链接或 ticket。"
+                        "已打开授权页。完成后应自动回 App；若仍停留在浏览器，请点“打开 Synapse Mobile”或粘贴回调链接/ticket。"
                     } else {
-                        "将打开系统浏览器访问 Happy-TTS /api/auth/linuxdo/start。授权完成后优先经 App Links 自动回 App；也可随时在下方粘贴回调链接或 ticket。"
+                        "将打开系统浏览器访问 Happy-TTS /api/auth/linuxdo/start?client=synapse-android。授权完成后优先经 synapse:// 或 App Links 回 App；也可随时在下方粘贴回调链接或 ticket。"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

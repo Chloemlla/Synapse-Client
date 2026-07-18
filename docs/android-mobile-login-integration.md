@@ -361,13 +361,14 @@ synapse://mobile-login?sessionId=<sessionId>&scanToken=<scanToken>&apiBaseUrl=<a
 推荐流程：
 
 1. 调用 `GET /api/auth/linuxdo/config` 判断是否启用。
-2. 用系统浏览器打开 `GET /api/auth/linuxdo/start?intent=login`（服务端完成 PKCE 并跳转 connect.linux.do）。
-3. 授权后服务端回调 `POST/GET /api/auth/linuxdo/callback`，成功时重定向到前端回调页并附带一次性 `ticket`。
-4. 已绑定账号：App 解析回调 URL 中的 `ticket`，调用 `POST /api/auth/linuxdo/exchange` 换取 JWT。
+2. 用系统浏览器打开 `GET /api/auth/linuxdo/start?intent=login&client=synapse-android`（服务端完成 PKCE 并跳转 connect.linux.do；`client` 会写入 OAuth state）。
+3. 授权后服务端回调 `POST/GET /api/auth/linuxdo/callback`，成功时重定向到前端回调页并附带一次性 `ticket` 与 `client=synapse-android`。
+4. 前端回调页仅在 `client=synapse-android` 时不会先消费 ticket，而是跳转/引导 `synapse://linuxdo-callback?ticket=...` 回 App。
+5. 已绑定账号：App 解析回调 URL / 深链中的 `ticket`，调用 `POST /api/auth/linuxdo/exchange` 换取 JWT。
 5. 未绑定账号：重定向到 `/auth/provider/bind?sessionToken=...`。移动端暂不实现网页绑定 UI，应提示用户先在网页完成绑定。
 6. 收到正式 JWT 后加密保存，并立即调用 `/api/auth/mobile-login/client-token/issue`。
 
-### Linux.do 自动回 App（Android App Links）
+### Linux.do 自动回 App（自定义深链 + App Links）
 
 为了授权完成后**自动回到 App**（无需粘贴 ticket），需要同时满足：
 
@@ -384,7 +385,9 @@ synapse://mobile-login?sessionId=<sessionId>&scanToken=<scanToken>&apiBaseUrl=<a
 3. 安装 **release 签名** APK（debug 签名 SHA-256 不同，需额外登记）
 4. 系统完成链接校验后，浏览器打开前端回调页时会优先拉起 App；`MainActivity` 解析 `ticket` 并调用 `POST /api/auth/linuxdo/exchange`
 
-可选自定义深链（手动/调试）：`synapse://linuxdo-callback?ticket=...`。
+可选自定义深链（手动/调试/兜底）：`synapse://linuxdo-callback?ticket=...`。
+
+**移动端兜底要求**：OAuth start 必须带 `client=synapse-android`；前端回调页不得在移动端先 exchange ticket；ticket 由 App 一次性消费。验证链接数为 0 时仍应依赖自定义深链。
 
 **注意**：仅改 App 不能生效；`assetlinks.json` 必须由 Happy-TTS / CDN 在 API 同源主机上可公开访问。校验可用：
 

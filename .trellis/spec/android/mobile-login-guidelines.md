@@ -307,11 +307,13 @@ Correct: `GET /api/auth/google/config?client=synapse-android` plus verification 
 ### Linux.do OAuth (browser + ticket)
 
 - Load `GET /api/auth/linuxdo/config`; show entry only when `enabled`.
-- Open `GET /api/auth/linuxdo/start?intent=login` in the system browser (server owns PKCE + client secret).
-- Complete login via `POST /api/auth/linuxdo/exchange` with one-time `ticket` from callback URL.
+- Open `GET /api/auth/linuxdo/start?intent=login&client=synapse-android` in the system browser (server owns PKCE + client secret; `client` is stored in OAuth state).
+- Happy-TTS success redirect lands on SPA `/auth/linuxdo/callback?ticket=...&client=synapse-android`.
+- SPA must not exchange the ticket first for mobile; it should hand off to `synapse://linuxdo-callback?ticket=...`.
+- Complete login via `POST /api/auth/linuxdo/exchange` with one-time `ticket` from callback URL / deep link / paste.
 - On JWT success: encrypt JWT, then issue SML client token.
 - If callback is provider-bind (`sessionToken` / `/auth/provider/bind`), tell user to finish binding on web; do not invent a mobile bind UI unless product asks.
-- Optional deep link: `synapse://linuxdo-callback?ticket=...`.
+- Keep HTTPS App Links for `/auth/linuxdo/callback` and `/auth/provider/bind` when verified; custom scheme is required fallback when verified links = 0.
 - Never log full ticket, JWT, or SML token.
 
 `SynapseLinuxDoCallbackParser` must stay pure-JVM:
@@ -328,8 +330,9 @@ App Links path matching:
 
 - Declare verified HTTPS intent-filters for `/auth/linuxdo/callback` and `/auth/provider/bind` on the trusted API host (`manifestPlaceholders.synapseApiHost`).
 - Host Digital Asset Links at `https://{api-host}/.well-known/assetlinks.json` with package `com.chloemlla.synapse.mobile` and release cert SHA-256.
-- Keep `synapse://linuxdo-callback` as manual fallback; keep paste-ticket UI when browser does not return.
-- Do not claim automatic return works until assetlinks is published and the release-signed APK is installed.
+- Always start OAuth with `client=synapse-android` so SPA can hand off via `synapse://linuxdo-callback` when App Links verification is incomplete.
+- Keep paste-ticket UI always visible; ticket TTL on Happy-TTS is 3 minutes to cover manual handoff.
+- Do not claim verified App Links auto-return works solely from assetlinks publish; device verification status must show the host under verified links.
 
 ### Package rename migration
 

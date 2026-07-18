@@ -47,7 +47,9 @@ class SynapseAuthRepository(
      */
     fun linuxDoStartUrl(intent: String = "login"): String {
         val cleanIntent = intent.trim().ifBlank { "login" }
-        return "${trustedApiOrigin.trimEnd('/')}/api/auth/linuxdo/start?intent=${Uri.encode(cleanIntent)}"
+        // client=synapse-android marks the OAuth state so callback can return via
+        // synapse://linuxdo-callback even when HTTPS App Links are unverified.
+        return "${trustedApiOrigin.trimEnd('/')}/api/auth/linuxdo/start?intent=${Uri.encode(cleanIntent)}&client=synapse-android"
     }
 
     suspend fun signInWithLinuxDoTicket(
