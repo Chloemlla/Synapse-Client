@@ -378,8 +378,9 @@ synapse://mobile-login?sessionId=<sessionId>&scanToken=<scanToken>&apiBaseUrl=<a
    - `{api-host}` 来自 `SYNAPSE_API_BASE_URL`（默认 `tts.chloemlla.com`）
 2. **站点发布 Digital Asset Links**：
    - URL：`https://{api-host}/.well-known/assetlinks.json`
-   - 必须包含包名 `com.chloemlla.synapse.mobile`（可选同时保留过渡期旧包 `com.synapse.mobile`）与 **发布签名证书 SHA-256**
-   - 示例文件：`docs/assetlinks.synapse-mobile.sample.json`
+   - 必须包含生产包名 `com.chloemlla.synapse.mobile`（推荐同时保留过渡期旧包 `com.synapse.mobile`）与 **发布签名证书 SHA-256**
+   - 仅登记 `com.synapse.mobile` 时，生产 flavor App Links 不会自动回 App
+   - Happy-TTS 默认 assetlinks 应同时输出两个包名；示例：`docs/assetlinks.synapse-mobile.sample.json`
 3. 安装 **release 签名** APK（debug 签名 SHA-256 不同，需额外登记）
 4. 系统完成链接校验后，浏览器打开前端回调页时会优先拉起 App；`MainActivity` 解析 `ticket` 并调用 `POST /api/auth/linuxdo/exchange`
 

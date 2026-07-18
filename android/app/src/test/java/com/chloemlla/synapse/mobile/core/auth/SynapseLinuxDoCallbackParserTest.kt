@@ -30,6 +30,29 @@ class SynapseLinuxDoCallbackParserTest {
     }
 
     @Test
+    fun parsesFrontendCallbackTicketWithTrailingSlash() {
+        val payload = SynapseLinuxDoCallbackParser.parse(
+            "https://tts.chloemlla.com/auth/linuxdo/callback/?ticket=ticket-slash&intent=login",
+        )
+        assertEquals("ticket-slash", payload.ticket)
+        assertTrue(
+            SynapseLinuxDoCallbackParser.isLinuxDoRelated(
+                "https://tts.chloemlla.com/auth/linuxdo/callback/?ticket=ticket-slash",
+            ),
+        )
+    }
+
+    @Test
+    fun parsesBareQueryCopiedFromSpaCallback() {
+        val payload = SynapseLinuxDoCallbackParser.parse(
+            "ticket=relay-ticket&intent=login",
+        )
+        assertEquals("relay-ticket", payload.ticket)
+        assertEquals("login", payload.intent)
+        assertTrue(SynapseLinuxDoCallbackParser.isLinuxDoRelated("?ticket=relay-ticket&intent=login"))
+    }
+
+    @Test
     fun parsesProviderBindRedirect() {
         val payload = SynapseLinuxDoCallbackParser.parse(
             "https://tts.chloemlla.com/auth/provider/bind?sessionToken=bind-session",

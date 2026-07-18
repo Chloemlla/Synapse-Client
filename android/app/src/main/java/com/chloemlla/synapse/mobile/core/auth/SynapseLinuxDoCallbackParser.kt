@@ -6,22 +6,37 @@ import java.net.URLDecoder
 /**
  * Parses Happy-TTS Linux.do OAuth completion redirects for the Android app.
  *
- * Successful login: frontend callback contains `ticket` (+ optional `intent`).
+ * Successful login: frontend SPA callback contains `ticket` (+ optional `intent`).
  * Needs web bind: `/auth/provider/bind?sessionToken=...`
  * Failure: `error` query param.
  *
- * Also accepts a custom app deep link:
- * `synapse://linuxdo-callback?ticket=...` or `?error=...`
+ * Also accepts:
+ * - custom app deep link `synapse://linuxdo-callback?ticket=...`
+ * - bare query fragments copied from the SPA page (`ticket=...&intent=login`)
+ *
+ * Backend OAuth redirect_uri `/api/auth/linuxdo/callback` is intentionally not
+ * treated as an app-owned completion URL.
  */
 object SynapseLinuxDoCallbackParser {
     const val APP_SCHEME = "synapse"
     const val APP_HOST = "linuxdo-callback"
     private const val FRONTEND_CALLBACK_PATH = "/auth/linuxdo/callback"
     private const val PROVIDER_BIND_PATH = "/auth/provider/bind"
+    private val CALLBACK_QUERY_KEYS = setOf(
+        "ticket",
+        "error",
+        "sessiontoken",
+        "mergetoken",
+        "status",
+        "intent",
+    )
 
     fun isLinuxDoRelated(raw: String): Boolean {
         val trimmed = raw.trim()
         if (trimmed.isBlank()) return false
+        if (looksLikeCallbackQuery(trimmed)) {
+            return true
+        }
         return try {
             val uri = URI(trimmed)
             when {
@@ -42,13 +57,31 @@ object SynapseLinuxDoCallbackParser {
     fun parse(raw: String): LinuxDoCallbackPayload {
         val trimmed = raw.trim()
         require(trimmed.isNotBlank()) { "Linux.do 回调地址为空。" }
+
+        // Accept bare query strings copied from the SPA completion page.
+        if (looksLikeCallbackQuery(trimmed)) {
+            return payloadFromQuery(
+                query = parseQuery(trimmed.removePrefix("?")),
+                path = FRONTEND_CALLBACK_PATH,
+            )
+        }
+
         val uri = try {
             URI(trimmed)
         } catch (error: Exception) {
             throw IllegalArgumentException("无法解析 Linux.do 回调地址。", error)
         }
 
-        val query = parseQuery(uri.rawQuery.orEmpty())
+        return payloadFromQuery(
+            query = parseQuery(uri.rawQuery.orEmpty()),
+            path = uri.path.orEmpty(),
+        )
+    }
+
+    private fun payloadFromQuery(
+        query: Map<String, String>,
+        path: String,
+    ): LinuxDoCallbackPayload {
         val error = query["error"]?.takeIf { it.isNotBlank() }
         val ticket = query["ticket"]?.takeIf { it.isNotBlank() }
         val intent = query["intent"]?.takeIf { it.isNotBlank() }
@@ -56,11 +89,9 @@ object SynapseLinuxDoCallbackParser {
         val bindStatus = query["status"]?.takeIf { it.isNotBlank() }
         val mergeToken = query["mergeToken"]?.takeIf { it.isNotBlank() }
 
-        val path = uri.path.orEmpty()
-        val isProviderBindPath = isProviderBindPath(path)
         val resolvedIntent = when {
             !intent.isNullOrBlank() -> intent
-            isProviderBindPath || !sessionToken.isNullOrBlank() -> "bind"
+            isProviderBindPath(path) || !sessionToken.isNullOrBlank() -> "bind"
             else -> null
         }
 
@@ -72,6 +103,14 @@ object SynapseLinuxDoCallbackParser {
             bindStatus = bindStatus,
             mergeToken = mergeToken,
         )
+    }
+
+    private fun looksLikeCallbackQuery(raw: String): Boolean {
+        if (raw.contains("://")) return false
+        val candidate = raw.removePrefix("?")
+        if (!candidate.contains('=')) return false
+        val keys = parseQuery(candidate).keys.map { it.lowercase() }.toSet()
+        return keys.any { it in CALLBACK_QUERY_KEYS }
     }
 
     private fun isFrontendCallbackPath(path: String?): Boolean {
