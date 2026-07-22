@@ -189,8 +189,8 @@ private fun SynapseAppHeader(
     val accountName = activeAccount?.displayName ?: state.credentials.displayName ?: "未登录"
     val tokenReady = state.hasCurrentClientLoginToken
     val qrReady = state.hasUsableQrPayload && state.hasAnyWebLoginCredential
-    val outerPadding = if (compact) 12.dp else 16.dp
-    val verticalSpacing = if (compact) 8.dp else 14.dp
+    val outerPadding = if (compact) 10.dp else 12.dp
+    val verticalSpacing = if (compact) 6.dp else 8.dp
     val iconSize = if (compact) 36.dp else 46.dp
 
     Surface(
@@ -1460,14 +1460,14 @@ private fun PanelColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(PaddingValues(16.dp)),
+                .padding(PaddingValues(12.dp)),
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .widthIn(max = 760.dp)
                     .align(Alignment.TopCenter),
-                verticalArrangement = Arrangement.spacedBy(if (compactHeader) 10.dp else 14.dp),
+                verticalArrangement = Arrangement.spacedBy(if (compactHeader) 6.dp else 8.dp),
             ) {
                 SynapseAppHeader(
                     state = state,
@@ -1478,7 +1478,7 @@ private fun PanelColumn(
                     onDismiss = onDismissFeedback,
                 )
                 content()
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(6.dp))
             }
         }
     }
