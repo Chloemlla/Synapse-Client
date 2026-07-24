@@ -198,14 +198,17 @@ private fun SynapseAppHeader(
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val spacing = LocalPanelSpacing.current
     val activeAccount = state.credentials.activeAccount ?: state.credentials.accounts.firstOrNull()
     val accountName = activeAccount?.displayName ?: state.credentials.displayName ?: "未登录"
     val tokenReady = state.hasCurrentClientLoginToken
     val qrReady = state.hasUsableQrPayload && state.hasAnyWebLoginCredential
     // Compact keeps pills collapsed, but still leaves readable outer/vertical breathing room.
-    val outerPadding = if (compact) 12.dp else 14.dp
-    val verticalSpacing = if (compact) 6.dp else 8.dp
+    val outerPadding = if (compact) spacing.cardPadding else spacing.cardPadding + 2.dp
+    val verticalSpacing = if (compact) spacing.itemSpacing - 2.dp else spacing.itemSpacing
     val iconSize = if (compact) 32.dp else 40.dp
+    val titleRowGap = if (compact) spacing.itemSpacing else spacing.itemSpacing + 2.dp
+    val pillRowGap = spacing.itemSpacing - 2.dp
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -220,7 +223,7 @@ private fun SynapseAppHeader(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(titleRowGap),
             ) {
                 Box(
                     modifier = Modifier
@@ -237,7 +240,7 @@ private fun SynapseAppHeader(
                 }
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                    verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing),
                 ) {
                     Text(
                         text = "安全登录中枢",
@@ -264,7 +267,7 @@ private fun SynapseAppHeader(
                 }
             }
             if (!compact) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(pillRowGap)) {
                     StatusPill(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Outlined.AccountCircle,
@@ -313,6 +316,10 @@ private fun StatusPill(
     value: String,
     active: Boolean,
 ) {
+    val spacing = LocalPanelSpacing.current
+    // Pills stay slightly denser than full rows, but still track viewport tokens.
+    val pillHorizontal = spacing.rowPaddingHorizontal - 2.dp
+    val pillVertical = spacing.rowPaddingVertical - 2.dp
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(10.dp),
@@ -320,9 +327,9 @@ private fun StatusPill(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = pillHorizontal, vertical = pillVertical),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing - 2.dp),
         ) {
             Icon(
                 imageVector = icon,
@@ -330,7 +337,10 @@ private fun StatusPill(
                 modifier = Modifier.size(16.dp),
                 tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing - 1.dp),
+            ) {
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
@@ -358,6 +368,7 @@ private fun StatusBanner(
 ) {
     if (!state.loading && state.status.isBlank() && state.error == null) return
 
+    val spacing = LocalPanelSpacing.current
     val isError = state.error != null
     // Bottom gap comes from PanelColumn sectionSpacing — avoid a fixed extra glue pad.
     Surface(
@@ -372,9 +383,12 @@ private fun StatusBanner(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(
+                    horizontal = spacing.rowPaddingHorizontal,
+                    vertical = spacing.rowPaddingVertical,
+                ),
             verticalAlignment = if (isError) Alignment.Top else Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
         ) {
             when {
                 state.loading -> CircularProgressIndicator(modifier = Modifier.size(20.dp))
@@ -889,7 +903,7 @@ private fun QrPanel(
                 ),
             )
         }
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(LocalPanelSpacing.current.itemSpacing)) {
             Button(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.loading,
@@ -1040,12 +1054,13 @@ private fun WebLoginAccountPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text("选择网页登录账号") },
         text = {
+            val spacing = LocalPanelSpacing.current
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 420.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
             ) {
                 Text(
                     text = "目标站点：$targetSite",
@@ -1081,6 +1096,7 @@ private fun WebLoginAccountChoice(
     enabled: Boolean,
     onSelect: () -> Unit,
 ) {
+    val spacing = LocalPanelSpacing.current
     val credentialLabel = when {
         account.hasJwt && account.hasClientLoginToken -> "可用凭据：JWT + SML"
         account.hasJwt -> "可用凭据：JWT"
@@ -1092,17 +1108,17 @@ private fun WebLoginAccountChoice(
         enabled = enabled,
         onClick = onSelect,
         shape = RoundedCornerShape(12.dp),
-        contentPadding = PaddingValues(14.dp),
+        contentPadding = PaddingValues(spacing.cardPadding),
     ) {
         Icon(
             imageVector = if (active) Icons.Outlined.VerifiedUser else Icons.Outlined.AccountCircle,
             contentDescription = null,
             modifier = Modifier.size(22.dp),
         )
-        Spacer(modifier = Modifier.size(12.dp))
+        Spacer(modifier = Modifier.size(spacing.itemSpacing + 2.dp))
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing + 1.dp),
             horizontalAlignment = Alignment.Start,
         ) {
             Text(
@@ -1152,7 +1168,7 @@ private fun SessionPanel(
                 ),
             )
         }
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(LocalPanelSpacing.current.itemSpacing)) {
             Button(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.loading && state.hasCurrentClientLoginToken,
@@ -1221,6 +1237,7 @@ private fun CredentialSummary(
     viewModel: SynapseLoginViewModel,
     title: String,
 ) {
+    val spacing = LocalPanelSpacing.current
     val accounts = state.credentials.accounts
     if (accounts.isEmpty()) return
 
@@ -1232,15 +1249,15 @@ private fun CredentialSummary(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
-            // Tighter padding than the old 16dp; token availability is already shown once
-            // in SynapseAppHeader's SML pill — avoid a second "令牌·可用" chip here.
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            // Token availability is already shown once in SynapseAppHeader's SML pill —
+            // avoid a second "令牌·可用" chip here.
+            modifier = Modifier.padding(spacing.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
             ) {
                 Box(
                     modifier = Modifier
@@ -1256,7 +1273,10 @@ private fun CredentialSummary(
                         tint = MaterialTheme.colorScheme.secondary,
                     )
                 }
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing),
+                ) {
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleSmall,
@@ -1323,6 +1343,7 @@ private fun AccountSelectorRow(
     active: Boolean,
     onSelect: () -> Unit,
 ) {
+    val spacing = LocalPanelSpacing.current
     val clipboard = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
     Surface(
@@ -1332,8 +1353,11 @@ private fun AccountSelectorRow(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Row(
-            modifier = Modifier.padding(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(
+                horizontal = spacing.rowPaddingHorizontal,
+                vertical = spacing.rowPaddingVertical,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -1369,6 +1393,7 @@ private fun CopyableLine(
     value: String,
     copyValue: String = value,
 ) {
+    val spacing = LocalPanelSpacing.current
     val clipboard = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
     val canCopy = copyValue.isNotBlank() && copyValue != "未返回" && copyValue != "未保存"
@@ -1379,13 +1404,16 @@ private fun CopyableLine(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(
+                horizontal = spacing.rowPaddingHorizontal,
+                vertical = spacing.rowPaddingVertical,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
+                verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing),
             ) {
                 Text(
                     text = label,
@@ -1461,22 +1489,39 @@ private fun ConfirmActionDialog(
 }
 
 /**
- * Viewport-driven page metrics for tab panels.
- * Derived from [BoxWithConstraints] so portrait phones breathe more while short/landscape stays compact.
+ * Viewport-driven page + component metrics for tab panels.
+ * Page metrics space major siblings; component tokens space content *inside* cards/rows/groups
+ * so form fields that already inherit [sectionSpacing] are not double-padded.
  */
-private data class PanelSpacing(
+internal data class PanelSpacing(
     val pagePadding: Dp,
     val sectionSpacing: Dp,
     val compactHeader: Boolean,
     val shortViewport: Boolean,
+    /** Gap between stacked actions / related controls inside a local group. */
+    val itemSpacing: Dp,
+    /** Internal padding for cards (CredentialSummary, InfoCard, empty states). */
+    val cardPadding: Dp,
+    /** Horizontal padding for dense rows (CopyableLine, account rows, status pills). */
+    val rowPaddingHorizontal: Dp,
+    /** Vertical padding for dense rows / pills / banners. */
+    val rowPaddingVertical: Dp,
+    /** Title/subtitle stack gap (header, section titles, label stacks). */
+    val tightTextSpacing: Dp,
 )
 
-private val LocalPanelSpacing = compositionLocalOf {
+internal val LocalPanelSpacing = compositionLocalOf {
+    // Fallback matches typical-phone tier when outside PanelColumn.
     PanelSpacing(
         pagePadding = 16.dp,
         sectionSpacing = 12.dp,
         compactHeader = false,
         shortViewport = false,
+        itemSpacing = 10.dp,
+        cardPadding = 14.dp,
+        rowPaddingHorizontal = 14.dp,
+        rowPaddingVertical = 10.dp,
+        tightTextSpacing = 3.dp,
     )
 }
 
@@ -1498,11 +1543,42 @@ private fun panelSpacingFor(maxWidth: Dp, maxHeight: Dp): PanelSpacing {
         typicalPhone -> maxWidth < 400.dp || maxHeight < 720.dp
         else -> false
     }
+    // Component density tracks viewport, but stays slightly tighter than page section gaps.
+    val itemSpacing = when {
+        shortViewport -> 8.dp
+        typicalPhone -> 10.dp
+        else -> 12.dp
+    }
+    val cardPadding = when {
+        shortViewport -> 12.dp
+        typicalPhone -> 14.dp
+        else -> 16.dp
+    }
+    val rowPaddingHorizontal = when {
+        shortViewport -> 12.dp
+        typicalPhone -> 14.dp
+        else -> 14.dp
+    }
+    val rowPaddingVertical = when {
+        shortViewport -> 8.dp
+        typicalPhone -> 10.dp
+        else -> 12.dp
+    }
+    val tightTextSpacing = when {
+        shortViewport -> 2.dp
+        typicalPhone -> 3.dp
+        else -> 4.dp
+    }
     return PanelSpacing(
         pagePadding = pagePadding,
         sectionSpacing = sectionSpacing,
         compactHeader = compactHeader,
         shortViewport = shortViewport,
+        itemSpacing = itemSpacing,
+        cardPadding = cardPadding,
+        rowPaddingHorizontal = rowPaddingHorizontal,
+        rowPaddingVertical = rowPaddingVertical,
+        tightTextSpacing = tightTextSpacing,
     )
 }
 
@@ -1551,10 +1627,11 @@ private fun SectionTitle(
     subtitle: String? = null,
     icon: ImageVector? = null,
 ) {
+    val spacing = LocalPanelSpacing.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
     ) {
         if (icon != null) {
             Box(
@@ -1574,7 +1651,7 @@ private fun SectionTitle(
         }
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing),
         ) {
             Text(
                 text = text,
@@ -1612,6 +1689,7 @@ private fun InfoCard(
     lines: List<String>,
     icon: ImageVector = Icons.Outlined.Info,
 ) {
+    val spacing = LocalPanelSpacing.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -1619,11 +1697,11 @@ private fun InfoCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(spacing.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
@@ -1656,8 +1734,6 @@ private fun IllustratedEmptyState(
     lines: List<String>,
 ) {
     val spacing = LocalPanelSpacing.current
-    val cardPadding = if (spacing.shortViewport) 12.dp else 16.dp
-    val contentSpacing = if (spacing.shortViewport) 8.dp else 10.dp
     // Scroll parents report infinite maxHeight, so shrink from PanelSpacing short/compact flags.
     val illustrationModifier = when {
         spacing.shortViewport -> {
@@ -1676,7 +1752,7 @@ private fun IllustratedEmptyState(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(16 / 9f)
-                .padding(horizontal = 8.dp)
+                .padding(horizontal = spacing.itemSpacing)
         }
     }
 
@@ -1687,8 +1763,8 @@ private fun IllustratedEmptyState(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
-            modifier = Modifier.padding(cardPadding),
-            verticalArrangement = Arrangement.spacedBy(contentSpacing),
+            modifier = Modifier.padding(spacing.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Image(
@@ -1719,7 +1795,6 @@ private fun IllustratedEmptyState(
 private fun OssCreditsFooter() {
     val uriHandler = LocalUriHandler.current
     val spacing = LocalPanelSpacing.current
-    val cardPadding = if (spacing.shortViewport) 12.dp else 16.dp
     val illustrationModifier = when {
         spacing.shortViewport -> {
             Modifier
@@ -1746,8 +1821,8 @@ private fun OssCreditsFooter() {
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(
-            modifier = Modifier.padding(cardPadding),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(spacing.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Image(

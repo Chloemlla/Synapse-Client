@@ -50,13 +50,14 @@ internal fun TurnstileVerificationPanel(
 ) {
     when {
         state.turnstileConfigLoading -> {
+            val spacing = LocalPanelSpacing.current
             TurnstileCard {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing)) {
                         Text("人机验证", style = MaterialTheme.typography.titleSmall)
                         Text(
                             text = "正在加载人机验证配置。",
@@ -105,7 +106,9 @@ internal fun TurnstileVerificationPanel(
                 when {
                     state.turnstileVerified -> {
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(
+                                LocalPanelSpacing.current.itemSpacing,
+                            ),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
@@ -145,6 +148,7 @@ private fun TurnstileCard(
     error: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val spacing = LocalPanelSpacing.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -158,8 +162,8 @@ private fun TurnstileCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(spacing.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
             content = content,
         )
     }
@@ -171,8 +175,9 @@ private fun TurnstileHeader(
     title: String,
     error: Boolean = false,
 ) {
+    val spacing = LocalPanelSpacing.current
     Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(

@@ -48,13 +48,19 @@ PanelColumn(state, onDismissFeedback) { /* tab body */ } // derives PanelSpacing
 - Crash reporting is provided by the published `com.chloemlla.lumen:lumen-crash` SDK from GitHub Packages. Host product copy may override title/message/share subject via `LumenCrashConfig`; do not reintroduce app-local crash core/UI under `core/crash` or `ui/CrashReportScreen`. Sanitization of paths, content/file URIs, bearer credentials, token/password query parameters, and API-key formats is owned by the SDK before persistence or display.
 - Keep panels constrained for larger screens and scrollable for mobile screens; text must use `maxLines` and `TextOverflow.Ellipsis` where long account/device/token values appear.
 - Large summary/status regions must live inside the tab's scrollable content and switch to a compact form on low-height layouts such as landscape, so users can always scroll past them to the form/actions below.
-- **Adaptive page spacing**: derive `pagePadding`, `sectionSpacing`, and `compactHeader` from `PanelColumn`'s `BoxWithConstraints` (`maxHeight` / `maxWidth`), not a single fixed density. Major tab blocks should not look glued together on portrait phones (target ≥ ~10–12 dp between sections). Suggested tiers:
+- **Adaptive page + component spacing**: derive metrics from `PanelColumn`'s `BoxWithConstraints` (`maxHeight` / `maxWidth`) via `PanelSpacing` / `LocalPanelSpacing`, not a single fixed density. Page metrics space major tab siblings; component tokens space content *inside* cards, rows, and local action groups so form fields that already inherit `sectionSpacing` are not double-padded. Major tab blocks should not look glued together on portrait phones (target ≥ ~10–12 dp between sections). Suggested tiers:
 
-  | Viewport | pagePadding | sectionSpacing | compactHeader |
-  |----------|-------------|----------------|---------------|
-  | height < 640 dp (short / landscape) | 12 dp | 10 dp | true |
-  | height < 800 dp (typical phone) | 16 dp | 12 dp | width < 400 dp or height < 720 dp |
-  | else (tall phone / tablet width) | 18 dp | 14 dp | false |
+  | Viewport | pagePadding | sectionSpacing | itemSpacing | cardPadding | rowPad (H/V) | tightText | compactHeader |
+  |----------|-------------|----------------|-------------|-------------|--------------|-----------|---------------|
+  | height < 640 dp (short / landscape) | 12 dp | 10 dp | 8 dp | 12 dp | 12 / 8 dp | 2 dp | true |
+  | height < 800 dp (typical phone) | 16 dp | 12 dp | 10 dp | 14 dp | 14 / 10 dp | 3 dp | width < 400 dp or height < 720 dp |
+  | else (tall phone / tablet width) | 18 dp | 14 dp | 12 dp | 16 dp | 14 / 12 dp | 4 dp | false |
+
+  Component token roles:
+  - `itemSpacing` — stacked actions / related controls inside a local group (QR/session button stacks, card internal stacks).
+  - `cardPadding` — CredentialSummary, InfoCard, empty-state, credits, Turnstile cards.
+  - `rowPaddingHorizontal` / `rowPaddingVertical` — CopyableLine, account selector rows, status banners (pills may be ~2 dp denser).
+  - `tightTextSpacing` — title/subtitle stacks (header, SectionTitle, label stacks).
 
   Header internal: compact outer ≥ 12 dp, vertical ≥ 6 dp; non-compact outer ≥ 14 dp, vertical ≥ 8 dp. Status banners must not add a fixed extra bottom pad that fights `sectionSpacing`. Empty-state / credits illustrations shrink on short or compact viewports so form actions stay reachable without endless scroll. Keep `widthIn(max = 760.dp)` centering on large screens.
 - Do not add visible instructional text about internal design choices, keyboard shortcuts, or implementation details.
@@ -76,7 +82,7 @@ PanelColumn(state, onDismissFeedback) { /* tab body */ } // derives PanelSpacing
 | Crash report or breadcrumb content | Use `LumenCrash.recordBreadcrumb` / `LumenCrash.record`; rely on the SDK sanitizer and do not fork app-local crash report builders. |
 | Long account, device, URL, or token-adjacent text | Cap lines and use ellipsis. |
 | Landscape or low-height screen | Keep header/status content scrollable and compact; do not pin a large banner above the scroll area. Compact still keeps ≥ ~10–12 dp page padding / section gaps. |
-| New or revised tab panel spacing | Drive padding/gaps from viewport via `PanelColumn` / `PanelSpacing`; do not hardcode 8 / 4–6 dp page density. |
+| New or revised tab panel spacing | Drive page + component gaps from viewport via `PanelColumn` / `PanelSpacing` / `LocalPanelSpacing`; do not hardcode 8 / 4–6 dp page density or fixed 8 dp action stacks / 12 dp card padding. |
 | Empty-state illustration on short height | Shrink illustration footprint (width fraction / max height) so fields remain reachable. |
 | New scanner/permission UI | Keep the permission rationale visible before launching permission request. |
 | Dismissible status banner | Provide a close action when status/error is non-loading; clearing must not wipe form input. |
@@ -145,6 +151,7 @@ BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         ) {
             SynapseAppHeader(state = state, compact = spacing.compactHeader)
             StatusBanner(state = state)
+            // Cards/rows/action groups use spacing.cardPadding / itemSpacing / rowPadding*
             TabContent()
         }
     }
