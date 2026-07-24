@@ -171,7 +171,12 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.4.2")
     implementation("androidx.camera:camera-lifecycle:1.4.2")
     implementation("androidx.camera:camera-view:1.4.2")
+    // ML Kit barcode retained as dual-backend fallback when HMS Scan Kit is unavailable.
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    // Huawei Scan Kit full/public SDK (scanplus): camera RemoteView + bitmap decode.
+    // Independent path — no agconnect-services.json / AGConnect plugin required.
+    // Artifact lives on https://developer.huawei.com/repo/ (see settings.gradle.kts).
+    implementation("com.huawei.hms:scanplus:2.15.0.301")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")

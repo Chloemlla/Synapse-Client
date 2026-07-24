@@ -52,6 +52,14 @@
 -dontwarn com.google.mlkit.**
 -dontwarn com.google.android.gms.internal.mlkit_vision_barcode.**
 
+# Huawei Scan Kit (scanplus free/public SDK) uses native/reflection entry points.
+# Keep HMS scan packages so R8 does not strip RemoteView / decoder bindings.
+-keep class com.huawei.hms.hmsscankit.** { *; }
+-keep class com.huawei.hms.ml.scan.** { *; }
+-keep class com.huawei.hms.mlsdk.** { *; }
+-dontwarn com.huawei.hms.**
+-dontwarn com.huawei.agconnect.**
+
 # OkHttp/Okio are direct networking dependencies and may reference optional platforms.
 -dontwarn okhttp3.**
 -dontwarn okio.**

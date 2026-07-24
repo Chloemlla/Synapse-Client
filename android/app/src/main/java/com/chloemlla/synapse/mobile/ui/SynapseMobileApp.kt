@@ -189,13 +189,14 @@ private fun SynapseAppHeader(
     val accountName = activeAccount?.displayName ?: state.credentials.displayName ?: "未登录"
     val tokenReady = state.hasCurrentClientLoginToken
     val qrReady = state.hasUsableQrPayload && state.hasAnyWebLoginCredential
-    val outerPadding = if (compact) 10.dp else 12.dp
-    val verticalSpacing = if (compact) 6.dp else 8.dp
-    val iconSize = if (compact) 36.dp else 46.dp
+    // Compact phones: prefer denser header; token availability is shown once via the SML pill.
+    val outerPadding = if (compact) 8.dp else 10.dp
+    val verticalSpacing = if (compact) 4.dp else 6.dp
+    val iconSize = if (compact) 32.dp else 40.dp
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 2.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -206,7 +207,7 @@ private fun SynapseAppHeader(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
             ) {
                 Box(
                     modifier = Modifier
@@ -223,32 +224,34 @@ private fun SynapseAppHeader(
                 }
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
                     Text(
                         text = "安全登录中枢",
                         style = if (compact) {
-                            MaterialTheme.typography.titleMedium
+                            MaterialTheme.typography.titleSmall
                         } else {
-                            MaterialTheme.typography.titleLarge
+                            MaterialTheme.typography.titleMedium
                         },
                         fontWeight = FontWeight.SemiBold,
                     )
+                    // Subtitle is account/context only — do not repeat token-available wording
+                    // (that status lives solely in the SML StatusPill below).
                     Text(
                         text = if (activeAccount == null) {
                             "登录、扫码确认和本机会话集中管理"
                         } else {
-                            "$accountName · ${if (tokenReady) "本机令牌可用" else "等待本机授权"}"
+                            accountName
                         },
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = if (compact) 1 else 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
             if (!compact) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     StatusPill(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Outlined.AccountCircle,
@@ -272,15 +275,16 @@ private fun SynapseAppHeader(
                     )
                 }
             } else {
+                // Single compact status line; SML is the only token-availability surface in the header.
                 StatusPill(
                     modifier = Modifier.fillMaxWidth(),
-                    icon = Icons.Outlined.QrCodeScanner,
-                    label = "状态",
-                    value = listOf(
-                        if (activeAccount != null) accountName else "未登录",
-                        if (tokenReady) "SML 已保存" else "SML 未保存",
-                        if (qrReady) "网页登录可确认" else "网页登录待准备",
-                    ).joinToString(" · "),
+                    icon = Icons.Outlined.Key,
+                    label = "SML",
+                    value = buildString {
+                        append(if (tokenReady) "已保存" else "未保存")
+                        append(" · ")
+                        append(if (qrReady) "网页可确认" else "网页待准备")
+                    },
                     active = tokenReady || qrReady,
                 )
             }
@@ -303,14 +307,14 @@ private fun StatusPill(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(16.dp),
                 tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Column(modifier = Modifier.weight(1f)) {
@@ -345,8 +349,8 @@ private fun StatusBanner(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 10.dp),
-        shape = RoundedCornerShape(14.dp),
+            .padding(bottom = 6.dp),
+        shape = RoundedCornerShape(12.dp),
         color = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
         border = BorderStroke(
             width = 1.dp,
@@ -356,7 +360,7 @@ private fun StatusBanner(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = if (isError) Alignment.Top else Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -1210,30 +1214,32 @@ private fun CredentialSummary(
     val active = state.credentials.activeAccount ?: accounts.first()
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            // Tighter padding than the old 16dp; token availability is already shown once
+            // in SynapseAppHeader's SML pill — avoid a second "令牌·可用" chip here.
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.secondaryContainer),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Key,
                         contentDescription = null,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.secondary,
                     )
                 }
@@ -1251,12 +1257,6 @@ private fun CredentialSummary(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                StatusPill(
-                    icon = Icons.Outlined.VerifiedUser,
-                    label = "令牌",
-                    value = if (active.hasClientLoginToken) "可用" else "未保存",
-                    active = active.hasClientLoginToken,
-                )
             }
             CopyableLine("当前账号", active.displayName)
             CopyableLine("User ID", active.userId ?: "未返回")
@@ -1454,20 +1454,21 @@ private fun PanelColumn(
     content: @Composable () -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val compactHeader = maxHeight < 520.dp
+        // Prefer compact header on typical phones (portrait ~640–800 dp height).
+        val compactHeader = maxHeight < 640.dp
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(PaddingValues(12.dp)),
+                .padding(PaddingValues(8.dp)),
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .widthIn(max = 760.dp)
                     .align(Alignment.TopCenter),
-                verticalArrangement = Arrangement.spacedBy(if (compactHeader) 6.dp else 8.dp),
+                verticalArrangement = Arrangement.spacedBy(if (compactHeader) 4.dp else 6.dp),
             ) {
                 SynapseAppHeader(
                     state = state,
@@ -1478,7 +1479,7 @@ private fun PanelColumn(
                     onDismiss = onDismissFeedback,
                 )
                 content()
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
             }
         }
     }
