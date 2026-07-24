@@ -11,6 +11,7 @@ import android.content.ClipData
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -83,10 +85,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -95,8 +99,14 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.chloemlla.synapse.mobile.BuildConfig
 import com.chloemlla.synapse.mobile.core.auth.StoredSynapseAccount
 import com.chloemlla.synapse.mobile.core.auth.SynapseTokenExpiry
+import com.chloemlla.synapse.mobile.ui.svg.DynamicColorImageVectors
+import com.chloemlla.synapse.mobile.ui.svg.drawablevectors.coder
+import com.chloemlla.synapse.mobile.ui.svg.drawablevectors.download
+import com.chloemlla.synapse.mobile.ui.svg.drawablevectors.videoFiles
+import com.chloemlla.synapse.mobile.ui.svg.drawablevectors.videoSteaming
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -434,9 +444,9 @@ private fun LoginPanel(
             title = "本客户端授权信息",
         )
         if (!state.hasStoredAccount) {
-            InfoCard(
+            IllustratedEmptyState(
+                illustration = DynamicColorImageVectors.download(),
                 title = "首次使用",
-                icon = Icons.Outlined.Info,
                 lines = listOf(
                     "先登录本客户端签发 SML 令牌，之后可用「网页登录」扫码确认电脑端。",
                     "已在网页完成二次验证时，也可在下方粘贴 JWT 直接授权本机。",
@@ -868,9 +878,9 @@ private fun QrPanel(
             title = "网页登录使用的本客户端账号",
         )
         if (!state.hasAnyWebLoginCredential) {
-            InfoCard(
+            IllustratedEmptyState(
+                illustration = DynamicColorImageVectors.videoSteaming(),
                 title = "需要先登录本客户端",
-                icon = Icons.Outlined.WarningAmber,
                 lines = listOf(
                     "确认网页登录前，请先在「本客户端登录」完成授权并签发令牌。",
                     "至少需要 JWT 或 SML 登录令牌之一。",
@@ -1131,9 +1141,9 @@ private fun SessionPanel(
             title = "设备与凭据",
         )
         if (!state.hasStoredAccount) {
-            InfoCard(
+            IllustratedEmptyState(
+                illustration = DynamicColorImageVectors.videoFiles(),
                 title = "暂无本地会话",
-                icon = Icons.Outlined.Info,
                 lines = listOf(
                     "还没有保存账号。请先到「本客户端登录」完成授权。",
                     "登录成功后可在这里自动登录、撤销令牌或清理凭据。",
@@ -1173,6 +1183,7 @@ private fun SessionPanel(
         ) {
             ButtonLabel(Icons.Outlined.DeleteOutline, "清理本地凭据")
         }
+        OssCreditsFooter()
     }
 
     if (showRevokeConfirmation) {
@@ -1584,6 +1595,100 @@ private fun InfoCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun IllustratedEmptyState(
+    illustration: ImageVector,
+    title: String,
+    lines: List<String>,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Image(
+                imageVector = illustration,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16 / 9f)
+                    .padding(horizontal = 8.dp),
+                contentScale = ContentScale.Fit,
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            lines.forEach { line ->
+                Text(
+                    text = line,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OssCreditsFooter() {
+    val uriHandler = LocalUriHandler.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Image(
+                imageVector = DynamicColorImageVectors.coder(),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxWidth(0.72f)
+                    .aspectRatio(16 / 9f),
+                contentScale = ContentScale.Fit,
+            )
+            Text(
+                text = "插画致谢",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "空状态插画基于 unDraw（Katerina Limpitsouni），使用 unDraw License。主题色随 Material 3 动态适配。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "构建 ${BuildConfig.VERSION_NAME} · ${BuildConfig.SHORT_HASH} · ${BuildConfig.BUILD_TIME}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            TextButton(
+                onClick = { uriHandler.openUri("https://undraw.co/") },
+                modifier = Modifier.align(Alignment.Start),
+            ) {
+                Text("打开 unDraw")
             }
         }
     }

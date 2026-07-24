@@ -70,6 +70,12 @@ android {
             "SHORT_HASH",
             "\"${buildConfigString(shortHash)}\"",
         )
+        val buildTime = providerString("SYNAPSE_BUILD_TIME", "local")
+        buildConfigField(
+            "String",
+            "BUILD_TIME",
+            "\"${buildConfigString(buildTime)}\"",
+        )
         // Used by Android App Links for Linux.do / provider-bind HTTPS callbacks.
         manifestPlaceholders["synapseApiHost"] = synapseApiHost
     }
