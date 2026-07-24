@@ -43,6 +43,7 @@ Product-facing Android notes also live in [`android/README.md`](android/README.m
 - Camera QR scan + paste + deep link (`synapse://mobile-login`)
 - HTTPS-only networking and encrypted private credential storage
 - Material 3 Compose UI (client login / web login / session tabs)
+- Theme-bound undraw empty-state illustrations (`DynamicColorImageVectors`; unDraw License)
 - Crash report screen with sanitized copy/share
 
 ## Requirements

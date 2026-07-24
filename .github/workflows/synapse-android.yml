@@ -59,15 +59,19 @@ jobs:
         run: |
           VERSION_NAME="1.0.${GITHUB_RUN_NUMBER}"
           SHORT_HASH="${GITHUB_SHA::8}"
+          BUILD_TIME="$(date -u +%Y-%m-%dT%H:%MZ)"
           echo "SYNAPSE_ANDROID_VERSION_NAME=${VERSION_NAME}" >> "$GITHUB_ENV"
           echo "SYNAPSE_ANDROID_VERSION_CODE=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
           echo "SYNAPSE_SHORT_HASH=${SHORT_HASH}" >> "$GITHUB_ENV"
+          echo "SYNAPSE_BUILD_TIME=${BUILD_TIME}" >> "$GITHUB_ENV"
           echo "SYNAPSE_ANDROID_RELEASE_VERSION=${VERSION_NAME}-${SHORT_HASH}" >> "$GITHUB_ENV"
 
       - name: Run unit tests
         env:
           SYNAPSE_ANDROID_VERSION_NAME: ${{ env.SYNAPSE_ANDROID_VERSION_NAME }}
           SYNAPSE_ANDROID_VERSION_CODE: ${{ env.SYNAPSE_ANDROID_VERSION_CODE }}
+          SYNAPSE_SHORT_HASH: ${{ env.SYNAPSE_SHORT_HASH }}
+          SYNAPSE_BUILD_TIME: ${{ env.SYNAPSE_BUILD_TIME }}
           SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.LUMEN_CRASH_READ_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
@@ -77,6 +81,8 @@ jobs:
         env:
           SYNAPSE_ANDROID_VERSION_NAME: ${{ env.SYNAPSE_ANDROID_VERSION_NAME }}
           SYNAPSE_ANDROID_VERSION_CODE: ${{ env.SYNAPSE_ANDROID_VERSION_CODE }}
+          SYNAPSE_SHORT_HASH: ${{ env.SYNAPSE_SHORT_HASH }}
+          SYNAPSE_BUILD_TIME: ${{ env.SYNAPSE_BUILD_TIME }}
           SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.LUMEN_CRASH_READ_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
@@ -86,6 +92,8 @@ jobs:
         env:
           SYNAPSE_ANDROID_VERSION_NAME: ${{ env.SYNAPSE_ANDROID_VERSION_NAME }}
           SYNAPSE_ANDROID_VERSION_CODE: ${{ env.SYNAPSE_ANDROID_VERSION_CODE }}
+          SYNAPSE_SHORT_HASH: ${{ env.SYNAPSE_SHORT_HASH }}
+          SYNAPSE_BUILD_TIME: ${{ env.SYNAPSE_BUILD_TIME }}
           SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.LUMEN_CRASH_READ_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
@@ -138,9 +146,11 @@ jobs:
         run: |
           VERSION_NAME="1.0.${GITHUB_RUN_NUMBER}"
           SHORT_HASH="${GITHUB_SHA::8}"
+          BUILD_TIME="$(date -u +%Y-%m-%dT%H:%MZ)"
           echo "SYNAPSE_ANDROID_VERSION_NAME=${VERSION_NAME}" >> "$GITHUB_ENV"
           echo "SYNAPSE_ANDROID_VERSION_CODE=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
           echo "SYNAPSE_SHORT_HASH=${SHORT_HASH}" >> "$GITHUB_ENV"
+          echo "SYNAPSE_BUILD_TIME=${BUILD_TIME}" >> "$GITHUB_ENV"
           echo "SYNAPSE_ANDROID_RELEASE_VERSION=${VERSION_NAME}-${SHORT_HASH}" >> "$GITHUB_ENV"
 
       - name: Validate release secrets
@@ -181,6 +191,8 @@ jobs:
         env:
           SYNAPSE_ANDROID_VERSION_NAME: ${{ env.SYNAPSE_ANDROID_VERSION_NAME }}
           SYNAPSE_ANDROID_VERSION_CODE: ${{ env.SYNAPSE_ANDROID_VERSION_CODE }}
+          SYNAPSE_SHORT_HASH: ${{ env.SYNAPSE_SHORT_HASH }}
+          SYNAPSE_BUILD_TIME: ${{ env.SYNAPSE_BUILD_TIME }}
           SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
           KEYSTORE_FILE: ${{ env.KEYSTORE_FILE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}

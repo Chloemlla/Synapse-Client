@@ -15,6 +15,14 @@ The app implements:
 * encrypted local credential storage;
 * HTTPS-only OkHttp client.
 
+## UI illustrations
+
+Empty states (first-run login, missing web-login credentials, empty session) use theme-bound undraw-style `ImageVector`s under `ui/svg/` (ported from Seal):
+
+* `DynamicColorImageVectors.download()` / `videoFiles()` / `videoSteaming()` / `coder()`
+* Path fills bind to `MaterialTheme.colorScheme` (e.g. `primaryContainer`, `surfaceContainerHigh`) so illustrations follow the app theme
+* Session tab footer credits unDraw (Katerina Limpitsouni, unDraw License) and shows `VERSION_NAME` · `SHORT_HASH` · `BUILD_TIME`
+
 ## Verification
 
 Repository policy prohibits local build, test, install, or dependency installation commands. Android verification is defined in `.github/workflows/synapse-android.yml` and must run in GitHub Actions.
