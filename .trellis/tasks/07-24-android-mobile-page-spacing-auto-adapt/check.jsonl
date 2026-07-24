@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/android/index.md", "reason": "Quality checklist for Android UI changes"}
+{"file": ".trellis/spec/android/ui-guidelines.md", "reason": "Validate adaptive spacing vs UI contracts"}
+{"file": ".trellis/tasks/07-24-android-mobile-page-spacing-auto-adapt/prd.md", "reason": "Acceptance: breathing room, compact short height, no auth changes"}

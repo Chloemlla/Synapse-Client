@@ -32,3 +32,5 @@ nexai-release.jks.bak
 keystore_base64.txt
 fuck-my-shit-mountain/
 synapse-android-verification-reports/
+.claude/
+Install-CodexClaudeTrellis.ps1

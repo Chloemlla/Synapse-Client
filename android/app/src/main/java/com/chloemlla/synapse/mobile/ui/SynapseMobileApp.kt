@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,7 +31,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -61,6 +61,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -74,10 +75,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -97,6 +99,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chloemlla.synapse.mobile.BuildConfig
@@ -109,10 +112,14 @@ import com.chloemlla.synapse.mobile.ui.svg.drawablevectors.videoFiles
 import com.chloemlla.synapse.mobile.ui.svg.drawablevectors.videoSteaming
 import kotlinx.coroutines.launch
 
+// Roomier default action padding keeps primary/secondary buttons consistent on mobile.
+private val SynapseButtonContentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SynapseMobileApp(viewModel: SynapseLoginViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val chromeSurface = MaterialTheme.colorScheme.surface
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -135,8 +142,9 @@ fun SynapseMobileApp(viewModel: SynapseLoginViewModel) {
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = chromeSurface,
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    scrolledContainerColor = chromeSurface,
                 ),
             )
         },
@@ -147,22 +155,39 @@ fun SynapseMobileApp(viewModel: SynapseLoginViewModel) {
                 .background(MaterialTheme.colorScheme.background)
                 .padding(padding),
         ) {
-            TabRow(
-                selectedTabIndex = state.selectedTab.ordinal,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary,
-            ) {
-                SynapseTab.entries.forEach { tab ->
-                    Tab(
-                        selected = state.selectedTab == tab,
-                        onClick = { viewModel.selectTab(tab) },
-                        icon = {
-                            Icon(
-                                imageVector = tab.icon(),
-                                contentDescription = null,
+            // Top bar + tabs share one surface; a thin divider replaces heavy double borders.
+            Surface(color = chromeSurface, shadowElevation = 0.dp) {
+                Column {
+                    TabRow(
+                        selectedTabIndex = state.selectedTab.ordinal,
+                        containerColor = chromeSurface,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                    ) {
+                        SynapseTab.entries.forEach { tab ->
+                            val selected = state.selectedTab == tab
+                            Tab(
+                                selected = selected,
+                                onClick = { viewModel.selectTab(tab) },
+                                selectedContentColor = MaterialTheme.colorScheme.primary,
+                                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                icon = {
+                                    Icon(
+                                        imageVector = tab.icon(),
+                                        contentDescription = null,
+                                    )
+                                },
+                                text = {
+                                    Text(
+                                        text = tab.label,
+                                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                    )
+                                },
                             )
-                        },
-                        text = { Text(tab.label) },
+                        }
+                    }
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
                     )
                 }
             }
@@ -195,21 +220,25 @@ private fun SynapseAppHeader(
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val spacing = LocalPanelSpacing.current
     val activeAccount = state.credentials.activeAccount ?: state.credentials.accounts.firstOrNull()
     val accountName = activeAccount?.displayName ?: state.credentials.displayName ?: "未登录"
     val tokenReady = state.hasCurrentClientLoginToken
     val qrReady = state.hasUsableQrPayload && state.hasAnyWebLoginCredential
-    // Compact phones: prefer denser header; token availability is shown once via the SML pill.
-    val outerPadding = if (compact) 8.dp else 10.dp
-    val verticalSpacing = if (compact) 4.dp else 6.dp
+    // Compact keeps pills collapsed, but still leaves readable outer/vertical breathing room.
+    val outerPadding = if (compact) spacing.cardPadding else spacing.cardPadding + 2.dp
+    val verticalSpacing = if (compact) spacing.itemSpacing - 2.dp else spacing.itemSpacing
     val iconSize = if (compact) 32.dp else 40.dp
+    val titleRowGap = if (compact) spacing.itemSpacing else spacing.itemSpacing + 2.dp
+    val pillRowGap = spacing.itemSpacing - 2.dp
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 1.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
     ) {
         Column(
             modifier = Modifier.padding(outerPadding),
@@ -217,7 +246,7 @@ private fun SynapseAppHeader(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(titleRowGap),
             ) {
                 Box(
                     modifier = Modifier
@@ -234,7 +263,7 @@ private fun SynapseAppHeader(
                 }
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                    verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing),
                 ) {
                     Text(
                         text = "安全登录中枢",
@@ -261,7 +290,7 @@ private fun SynapseAppHeader(
                 }
             }
             if (!compact) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(pillRowGap)) {
                     StatusPill(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Outlined.AccountCircle,
@@ -310,24 +339,52 @@ private fun StatusPill(
     value: String,
     active: Boolean,
 ) {
+    val spacing = LocalPanelSpacing.current
+    // Pills stay slightly denser than full rows, but still track viewport tokens.
+    val pillHorizontal = spacing.rowPaddingHorizontal - 2.dp
+    val pillVertical = spacing.rowPaddingVertical - 2.dp
+    // Active pills use primaryContainer for stronger emphasis; inactive stay quieter.
+    val containerColor = if (active) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    }
+    val borderColor = if (active) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+    }
+    val iconTint = if (active) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+    }
+    val valueColor = if (active) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(10.dp),
-        color = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = MaterialTheme.shapes.medium,
+        color = containerColor,
+        border = BorderStroke(1.dp, borderColor),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = pillHorizontal, vertical = pillVertical),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing - 2.dp),
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = iconTint,
             )
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing - 1.dp),
+            ) {
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
@@ -338,8 +395,8 @@ private fun StatusPill(
                 Text(
                     text = value,
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                    color = valueColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -355,24 +412,34 @@ private fun StatusBanner(
 ) {
     if (!state.loading && state.status.isBlank() && state.error == null) return
 
+    val spacing = LocalPanelSpacing.current
     val isError = state.error != null
+    // Soft success / clearer error hierarchy; bottom gap from PanelColumn sectionSpacing.
+    val containerColor = when {
+        isError -> MaterialTheme.colorScheme.errorContainer
+        state.loading -> MaterialTheme.colorScheme.surfaceContainerHigh
+        else -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f)
+    }
+    val borderColor = when {
+        isError -> MaterialTheme.colorScheme.error.copy(alpha = 0.55f)
+        state.loading -> MaterialTheme.colorScheme.outlineVariant
+        else -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)
+    }
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 6.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
-        ),
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = containerColor,
+        border = BorderStroke(width = 1.dp, color = borderColor),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(
+                    horizontal = spacing.rowPaddingHorizontal,
+                    vertical = spacing.rowPaddingVertical,
+                ),
             verticalAlignment = if (isError) Alignment.Top else Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
         ) {
             when {
                 state.loading -> CircularProgressIndicator(modifier = Modifier.size(20.dp))
@@ -387,16 +454,17 @@ private fun StatusBanner(
                     tint = MaterialTheme.colorScheme.secondary,
                 )
             }
+            val contentColor = when {
+                isError -> MaterialTheme.colorScheme.onErrorContainer
+                state.loading -> MaterialTheme.colorScheme.onSurface
+                else -> MaterialTheme.colorScheme.onSecondaryContainer
+            }
             Text(
                 text = state.error ?: state.status.ifBlank { "处理中..." },
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium,
                 softWrap = true,
-                color = if (isError) {
-                    MaterialTheme.colorScheme.onErrorContainer
-                } else {
-                    MaterialTheme.colorScheme.onSecondaryContainer
-                },
+                color = contentColor,
             )
             if (!state.loading && onDismiss != null && (state.error != null || state.status.isNotBlank())) {
                 IconButton(
@@ -406,11 +474,7 @@ private fun StatusBanner(
                     Icon(
                         imageVector = Icons.Outlined.Close,
                         contentDescription = "关闭提示",
-                        tint = if (isError) {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        },
+                        tint = contentColor,
                     )
                 }
             }
@@ -453,398 +517,435 @@ private fun LoginPanel(
                 ),
             )
         }
-        OutlinedTextField(
-            value = state.username,
-            onValueChange = viewModel::updateUsername,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            enabled = !state.loading,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Next,
-            ),
-            label = { Text("用户名或邮箱") },
-        )
-        OutlinedTextField(
-            value = state.password,
-            onValueChange = viewModel::updatePassword,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            enabled = !state.loading,
-            visualTransformation = if (passwordVisible) {
-                VisualTransformation.None
-            } else {
-                PasswordVisualTransformation()
-            },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    keyboardController?.hide()
-                    if (canSubmitLogin) {
-                        viewModel.login()
+
+        // Primary path: credentials, Turnstile, login, and in-flow 2FA.
+        SectionCard(
+            title = "账号密码登录",
+            subtitle = "主路径：填写账号信息并签发本机令牌。",
+            icon = Icons.AutoMirrored.Outlined.Login,
+            emphasized = true,
+        ) {
+            OutlinedTextField(
+                value = state.username,
+                onValueChange = viewModel::updateUsername,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                enabled = !state.loading,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next,
+                ),
+                label = { Text("用户名或邮箱") },
+            )
+            OutlinedTextField(
+                value = state.password,
+                onValueChange = viewModel::updatePassword,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                enabled = !state.loading,
+                visualTransformation = if (passwordVisible) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done,
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        keyboardController?.hide()
+                        if (canSubmitLogin) {
+                            viewModel.login()
+                        }
+                    },
+                ),
+                trailingIcon = {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(
+                            imageVector = if (passwordVisible) {
+                                Icons.Outlined.VisibilityOff
+                            } else {
+                                Icons.Outlined.Visibility
+                            },
+                            contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
+                        )
                     }
                 },
-            ),
-            trailingIcon = {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(
-                        imageVector = if (passwordVisible) {
-                            Icons.Outlined.VisibilityOff
-                        } else {
-                            Icons.Outlined.Visibility
-                        },
-                        contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
-                    )
-                }
-            },
-            label = { Text("密码") },
-        )
-        OutlinedTextField(
-            value = state.deviceName,
-            onValueChange = viewModel::updateDeviceName,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            enabled = !state.loading,
-            supportingText = { Text("显示在网页端的设备名称，便于识别本机。") },
-            label = { Text("设备名称") },
-        )
-        TurnstileVerificationPanel(
-            state = state,
-            onVerified = viewModel::handleTurnstileVerify,
-            onExpired = viewModel::handleTurnstileExpire,
-            onError = viewModel::handleTurnstileError,
-            onRetryWidget = viewModel::retryTurnstile,
-            onReloadConfig = viewModel::loadTurnstileConfig,
-        )
-        Button(
-            modifier = Modifier.fillMaxWidth(),
-            enabled = canSubmitLogin,
-            onClick = {
-                keyboardController?.hide()
-                viewModel.login()
-            },
-        ) {
-            if (state.loading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                )
-                Spacer(modifier = Modifier.size(8.dp))
-                Text("登录中…")
-            } else {
-                ButtonLabel(Icons.AutoMirrored.Outlined.Login, "登录本客户端并签发令牌")
-            }
-        }
-        Text(
-            text = "这是登录本客户端；如需二次验证，完成 TOTP 或 Passkey 后才会保存客户端令牌。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        state.pendingTwoFactorChallenge?.let { challenge ->
-            InfoCard(
-                title = "本客户端登录需要二次验证",
-                icon = Icons.Outlined.VerifiedUser,
-                lines = listOf(
-                    "账号：${challenge.user?.username ?: state.username}",
-                    "验证方式：${challenge.methodLabel}",
-                    "二次验证凭据：已接收",
-                ),
+                label = { Text("密码") },
             )
-            if (challenge.methods.any { it.equals("Passkey", ignoreCase = true) }) {
+            OutlinedTextField(
+                value = state.deviceName,
+                onValueChange = viewModel::updateDeviceName,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                enabled = !state.loading,
+                supportingText = { Text("显示在网页端的设备名称，便于识别本机。") },
+                label = { Text("设备名称") },
+            )
+            TurnstileVerificationPanel(
+                state = state,
+                onVerified = viewModel::handleTurnstileVerify,
+                onExpired = viewModel::handleTurnstileExpire,
+                onError = viewModel::handleTurnstileError,
+                onRetryWidget = viewModel::retryTurnstile,
+                onReloadConfig = viewModel::loadTurnstileConfig,
+            )
+            Button(
+                modifier = Modifier.fillMaxWidth(),
+                enabled = canSubmitLogin,
+                contentPadding = SynapseButtonContentPadding,
+                onClick = {
+                    keyboardController?.hide()
+                    viewModel.login()
+                },
+            ) {
+                if (state.loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("登录中…")
+                } else {
+                    ButtonLabel(Icons.AutoMirrored.Outlined.Login, "登录本客户端并签发令牌")
+                }
+            }
+            Text(
+                text = "这是登录本客户端；如需二次验证，完成 TOTP 或 Passkey 后才会保存客户端令牌。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            state.pendingTwoFactorChallenge?.let { challenge ->
+                InfoCard(
+                    title = "本客户端登录需要二次验证",
+                    icon = Icons.Outlined.VerifiedUser,
+                    lines = listOf(
+                        "账号：${challenge.user?.username ?: state.username}",
+                        "验证方式：${challenge.methodLabel}",
+                        "二次验证凭据：已接收",
+                    ),
+                )
+                if (challenge.methods.any { it.equals("Passkey", ignoreCase = true) }) {
+                    val context = LocalContext.current
+                    val activity = remember(context) { context.findActivity() }
+                    val passkeyClient = remember(context) { SynapsePasskeyCredentialClient(context) }
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !state.loading && activity != null,
+                        contentPadding = SynapseButtonContentPadding,
+                        onClick = {
+                            val host = activity ?: return@Button
+                            viewModel.startPasskeyAuthentication(host, passkeyClient)
+                        },
+                    ) {
+                        ButtonLabel(Icons.Outlined.Key, "使用通行密钥验证")
+                    }
+                    if (activity == null) {
+                        Text(
+                            text = "当前界面无法获取 Activity，暂不能唤起 Credential Manager。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+                if (challenge.methods.any { it.equals("TOTP", ignoreCase = true) }) {
+                    OutlinedTextField(
+                        value = state.totpCode,
+                        onValueChange = viewModel::updateTotpCode,
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !state.loading,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.NumberPassword,
+                            imeAction = ImeAction.Next,
+                        ),
+                        supportingText = { Text("输入身份验证器中的 6 位动态码。") },
+                        label = { Text("TOTP 验证码") },
+                    )
+                    OutlinedTextField(
+                        value = state.backupCode,
+                        onValueChange = viewModel::updateBackupCode,
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !state.loading,
+                        supportingText = { Text("无法使用动态码时，可改用备用恢复码。") },
+                        label = { Text("备用恢复码") },
+                    )
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !state.loading && (state.totpCode.isNotBlank() || state.backupCode.isNotBlank()),
+                        contentPadding = SynapseButtonContentPadding,
+                        onClick = viewModel::verifyTotp,
+                    ) {
+                        ButtonLabel(Icons.Outlined.VerifiedUser, "完成 TOTP 并登录本客户端")
+                    }
+                }
+            }
+            state.passkeyOptions?.let { options ->
+                InfoCard(
+                    title = if (options.discoverable) "Discoverable Passkey" else "Passkey 验证中",
+                    icon = Icons.Outlined.Key,
+                    lines = options.summaryLines + listOf(
+                        "系统通行密钥界面应已自动弹出；若未弹出可点下方按钮重试。",
+                        "不会在界面展示 challenge 或 credential id 原文。",
+                    ),
+                )
                 val context = LocalContext.current
                 val activity = remember(context) { context.findActivity() }
                 val passkeyClient = remember(context) { SynapsePasskeyCredentialClient(context) }
-                Button(
+                OutlinedButton(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !state.loading && activity != null,
+                    contentPadding = SynapseButtonContentPadding,
                     onClick = {
-                        val host = activity ?: return@Button
-                        viewModel.startPasskeyAuthentication(host, passkeyClient)
+                        val host = activity ?: return@OutlinedButton
+                        viewModel.authenticateWithPasskey(host, passkeyClient)
                     },
                 ) {
-                    ButtonLabel(Icons.Outlined.Key, "使用通行密钥验证")
-                }
-                if (activity == null) {
-                    Text(
-                        text = "当前界面无法获取 Activity，暂不能唤起 Credential Manager。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
-            if (challenge.methods.any { it.equals("TOTP", ignoreCase = true) }) {
-                OutlinedTextField(
-                    value = state.totpCode,
-                    onValueChange = viewModel::updateTotpCode,
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    enabled = !state.loading,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.NumberPassword,
-                        imeAction = ImeAction.Next,
-                    ),
-                    supportingText = { Text("输入身份验证器中的 6 位动态码。") },
-                    label = { Text("TOTP 验证码") },
-                )
-                OutlinedTextField(
-                    value = state.backupCode,
-                    onValueChange = viewModel::updateBackupCode,
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    enabled = !state.loading,
-                    supportingText = { Text("无法使用动态码时，可改用备用恢复码。") },
-                    label = { Text("备用恢复码") },
-                )
-                Button(
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !state.loading && (state.totpCode.isNotBlank() || state.backupCode.isNotBlank()),
-                    onClick = viewModel::verifyTotp,
-                ) {
-                    ButtonLabel(Icons.Outlined.VerifiedUser, "完成 TOTP 并登录本客户端")
+                    ButtonLabel(Icons.Outlined.Key, "重新唤起系统通行密钥")
                 }
             }
         }
-        state.passkeyOptions?.let { options ->
-            InfoCard(
-                title = if (options.discoverable) "Discoverable Passkey" else "Passkey 验证中",
-                icon = Icons.Outlined.Key,
-                lines = options.summaryLines + listOf(
-                    "系统通行密钥界面应已自动弹出；若未弹出可点下方按钮重试。",
-                    "不会在界面展示 challenge 或 credential id 原文。",
-                ),
-            )
-            val context = LocalContext.current
-            val activity = remember(context) { context.findActivity() }
-            val passkeyClient = remember(context) { SynapsePasskeyCredentialClient(context) }
-            OutlinedButton(
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !state.loading && activity != null,
-                onClick = {
-                    val host = activity ?: return@OutlinedButton
-                    viewModel.authenticateWithPasskey(host, passkeyClient)
-                },
-            ) {
-                ButtonLabel(Icons.Outlined.Key, "重新唤起系统通行密钥")
-            }
-        }
-        // Passwordless discoverable entry is available even without a prior password 2FA challenge.
+
+        // Passwordless / provider paths stay secondary and calmer (outlined CTAs, quieter containers).
         if (state.pendingTwoFactorChallenge == null) {
-            val context = LocalContext.current
-            val activity = remember(context) { context.findActivity() }
-            val passkeyClient = remember(context) { SynapsePasskeyCredentialClient(context) }
-            OutlinedButton(
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !state.loading && activity != null,
-                onClick = {
-                    val host = activity ?: return@OutlinedButton
-                    viewModel.startDiscoverablePasskeyAuthentication(host, passkeyClient)
-                },
+            SectionCard(
+                title = "通行密钥登录",
+                subtitle = "无需密码，直接唤起系统通行密钥。",
+                icon = Icons.Outlined.Key,
+                secondary = true,
             ) {
-                ButtonLabel(Icons.Outlined.Key, "使用通行密钥直接登录（无需密码）")
-            }
-        }
-        if (state.googleAuthConfig.canSignIn || state.googleAuthConfigLoading || state.googleAuthConfigError != null) {
-            SectionTitle(
-                text = "使用 Google 账号登录",
-                subtitle = "通过 Credential Manager 获取 Google ID Token，对接 Happy-TTS /api/auth/google。",
-            )
-            if (state.googleAuthConfigLoading) {
-                Text(
-                    text = "正在检查 Google 登录配置…",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else if (state.googleAuthConfigError != null) {
-                InfoCard(
-                    icon = Icons.Outlined.WarningAmber,
-                    title = "Google 登录配置不可用",
-                    lines = listOf(
-                        state.googleAuthConfigError ?: "无法加载 Google 登录配置。",
-                        "可稍后重试，或继续使用密码 / 通行密钥登录。",
-                    ),
-                )
-                OutlinedButton(
-                    onClick = viewModel::loadGoogleAuthConfig,
-                    enabled = !state.loading,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    ButtonLabel(Icons.Outlined.Security, "重新加载 Google 登录配置")
-                }
-            } else if (state.googleAuthConfig.canSignIn) {
                 val context = LocalContext.current
                 val activity = remember(context) { context.findActivity() }
-                val googleClient = remember(context) { SynapseGoogleCredentialClient(context) }
-                Button(
-                    onClick = {
-                        val host = activity ?: return@Button
-                        viewModel.signInWithGoogle(host, googleClient)
-                    },
-                    enabled = !state.loading && activity != null,
+                val passkeyClient = remember(context) { SynapsePasskeyCredentialClient(context) }
+                OutlinedButton(
                     modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.loading && activity != null,
+                    contentPadding = SynapseButtonContentPadding,
+                    onClick = {
+                        val host = activity ?: return@OutlinedButton
+                        viewModel.startDiscoverablePasskeyAuthentication(host, passkeyClient)
+                    },
                 ) {
-                    ButtonLabel(Icons.Outlined.AccountCircle, "使用 Google 账号登录")
+                    ButtonLabel(Icons.Outlined.Key, "使用通行密钥直接登录（无需密码）")
                 }
-                Text(
-                    text = "将唤起系统 Google 账号选择；登录成功后自动签发本机 SML 令牌。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            }
+        }
+
+        if (state.googleAuthConfig.canSignIn || state.googleAuthConfigLoading || state.googleAuthConfigError != null) {
+            SectionCard(
+                title = "使用 Google 账号登录",
+                subtitle = "通过 Credential Manager 获取 Google ID Token，对接 Happy-TTS /api/auth/google。",
+                icon = Icons.Outlined.AccountCircle,
+                secondary = true,
+            ) {
+                if (state.googleAuthConfigLoading) {
+                    Text(
+                        text = "正在检查 Google 登录配置…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else if (state.googleAuthConfigError != null) {
+                    InfoCard(
+                        icon = Icons.Outlined.WarningAmber,
+                        title = "Google 登录配置不可用",
+                        lines = listOf(
+                            state.googleAuthConfigError ?: "无法加载 Google 登录配置。",
+                            "可稍后重试，或继续使用密码 / 通行密钥登录。",
+                        ),
+                    )
+                    OutlinedButton(
+                        onClick = viewModel::loadGoogleAuthConfig,
+                        enabled = !state.loading,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = SynapseButtonContentPadding,
+                    ) {
+                        ButtonLabel(Icons.Outlined.Security, "重新加载 Google 登录配置")
+                    }
+                } else if (state.googleAuthConfig.canSignIn) {
+                    val context = LocalContext.current
+                    val activity = remember(context) { context.findActivity() }
+                    val googleClient = remember(context) { SynapseGoogleCredentialClient(context) }
+                    OutlinedButton(
+                        onClick = {
+                            val host = activity ?: return@OutlinedButton
+                            viewModel.signInWithGoogle(host, googleClient)
+                        },
+                        enabled = !state.loading && activity != null,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = SynapseButtonContentPadding,
+                    ) {
+                        ButtonLabel(Icons.Outlined.AccountCircle, "使用 Google 账号登录")
+                    }
+                    Text(
+                        text = "将唤起系统 Google 账号选择；登录成功后自动签发本机 SML 令牌。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
 
         if (state.linuxDoAuthConfig.canSignIn || state.linuxDoAuthConfigLoading || state.linuxDoAuthConfigError != null) {
-            SectionTitle(
-                text = "使用 Linux.do 登录",
+            SectionCard(
+                title = "使用 Linux.do 登录",
                 subtitle = "浏览器完成 OAuth 授权后，用 ticket 换取 JWT 并签发本机 SML 令牌。",
-            )
-            if (state.linuxDoAuthConfigLoading) {
-                Text(
-                    text = "正在检查 Linux.do 登录配置…",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else if (state.linuxDoAuthConfigError != null) {
-                InfoCard(
-                    icon = Icons.Outlined.WarningAmber,
-                    title = "Linux.do 登录配置不可用",
-                    lines = listOf(
-                        state.linuxDoAuthConfigError ?: "无法加载 Linux.do 登录配置。",
-                        "可稍后重试，或继续使用密码 / Google / 通行密钥登录。",
-                    ),
-                )
-                OutlinedButton(
-                    onClick = viewModel::loadLinuxDoAuthConfig,
-                    enabled = !state.loading,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    ButtonLabel(Icons.Outlined.Security, "重新加载 Linux.do 登录配置")
-                }
-            } else if (state.linuxDoAuthConfig.canSignIn) {
-                val context = LocalContext.current
-                Button(
-                    onClick = {
-                        val url = viewModel.linuxDoStartUrl("login")
-                        runCatching {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                            )
-                            viewModel.markLinuxDoBrowserOpened()
-                        }.onFailure { error ->
-                            viewModel.reportLinuxDoBrowserOpenFailed(
-                                SynapseFailureMessage.from(
-                                    error = error,
-                                    fallback = "无法打开浏览器进行 Linux.do 授权。",
-                                    context = "Linux.do browser open",
-                                ),
-                            )
-                        }
-                    },
-                    enabled = !state.loading,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    ButtonLabel(Icons.Outlined.AccountCircle, "使用 Linux.do 登录")
-                }
-                Text(
-                    text = if (state.linuxDoBrowserOpened) {
-                        "已打开授权页。完成后应自动回 App；若仍停留在浏览器，请点“打开 Synapse Mobile”或粘贴回调链接/ticket。"
-                    } else {
-                        "将打开系统浏览器访问 Happy-TTS /api/auth/linuxdo/start?client=synapse-android。授权完成后优先经 synapse:// 或 App Links 回 App；也可随时在下方粘贴回调链接或 ticket。"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                // Always keep paste entry visible: App Links may fail, browser may open
-                // outside this process, and users may already hold a ticket.
-                var linuxDoCallbackInput by rememberSaveable { mutableStateOf("") }
-                OutlinedTextField(
-                    value = linuxDoCallbackInput,
-                    onValueChange = { linuxDoCallbackInput = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = false,
-                    minLines = 2,
-                    enabled = !state.loading,
-                    label = { Text("Linux.do 回调链接或 ticket") },
-                    supportingText = {
-                        Text("可粘贴完整回调 URL（含 ticket=）、裸 query（ticket=...），或仅粘贴 ticket 字符串。")
-                    },
-                )
-                OutlinedButton(
-                    onClick = {
-                        val raw = linuxDoCallbackInput.trim()
-                        if (raw.isBlank()) return@OutlinedButton
-                        if (
-                            raw.contains("://") ||
-                            raw.contains("ticket=") ||
-                            raw.contains("error=") ||
-                            raw.contains("sessionToken=") ||
-                            raw.startsWith("?")
-                        ) {
-                            viewModel.completeLinuxDoFromCallback(raw)
+                icon = Icons.Outlined.AccountCircle,
+                secondary = true,
+            ) {
+                if (state.linuxDoAuthConfigLoading) {
+                    Text(
+                        text = "正在检查 Linux.do 登录配置…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else if (state.linuxDoAuthConfigError != null) {
+                    InfoCard(
+                        icon = Icons.Outlined.WarningAmber,
+                        title = "Linux.do 登录配置不可用",
+                        lines = listOf(
+                            state.linuxDoAuthConfigError ?: "无法加载 Linux.do 登录配置。",
+                            "可稍后重试，或继续使用密码 / Google / 通行密钥登录。",
+                        ),
+                    )
+                    OutlinedButton(
+                        onClick = viewModel::loadLinuxDoAuthConfig,
+                        enabled = !state.loading,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = SynapseButtonContentPadding,
+                    ) {
+                        ButtonLabel(Icons.Outlined.Security, "重新加载 Linux.do 登录配置")
+                    }
+                } else if (state.linuxDoAuthConfig.canSignIn) {
+                    val context = LocalContext.current
+                    OutlinedButton(
+                        onClick = {
+                            val url = viewModel.linuxDoStartUrl("login")
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                                viewModel.markLinuxDoBrowserOpened()
+                            }.onFailure { error ->
+                                viewModel.reportLinuxDoBrowserOpenFailed(
+                                    SynapseFailureMessage.from(
+                                        error = error,
+                                        fallback = "无法打开浏览器进行 Linux.do 授权。",
+                                        context = "Linux.do browser open",
+                                    ),
+                                )
+                            }
+                        },
+                        enabled = !state.loading,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = SynapseButtonContentPadding,
+                    ) {
+                        ButtonLabel(Icons.Outlined.AccountCircle, "使用 Linux.do 登录")
+                    }
+                    Text(
+                        text = if (state.linuxDoBrowserOpened) {
+                            "已打开授权页。完成后应自动回 App；若仍停留在浏览器，请点“打开 Synapse Mobile”或粘贴回调链接/ticket。"
                         } else {
-                            viewModel.exchangeLinuxDoTicket(raw)
-                        }
-                    },
-                    enabled = !state.loading && linuxDoCallbackInput.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    ButtonLabel(Icons.Outlined.Key, "提交 Linux.do 登录票据")
+                            "将打开系统浏览器访问 Happy-TTS /api/auth/linuxdo/start?client=synapse-android。授权完成后优先经 synapse:// 或 App Links 回 App；也可随时在下方粘贴回调链接或 ticket。"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    // Always keep paste entry visible: App Links may fail, browser may open
+                    // outside this process, and users may already hold a ticket.
+                    var linuxDoCallbackInput by rememberSaveable { mutableStateOf("") }
+                    OutlinedTextField(
+                        value = linuxDoCallbackInput,
+                        onValueChange = { linuxDoCallbackInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = false,
+                        minLines = 2,
+                        enabled = !state.loading,
+                        label = { Text("Linux.do 回调链接或 ticket") },
+                        supportingText = {
+                            Text("可粘贴完整回调 URL（含 ticket=）、裸 query（ticket=...），或仅粘贴 ticket 字符串。")
+                        },
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            val raw = linuxDoCallbackInput.trim()
+                            if (raw.isBlank()) return@OutlinedButton
+                            if (
+                                raw.contains("://") ||
+                                raw.contains("ticket=") ||
+                                raw.contains("error=") ||
+                                raw.contains("sessionToken=") ||
+                                raw.startsWith("?")
+                            ) {
+                                viewModel.completeLinuxDoFromCallback(raw)
+                            } else {
+                                viewModel.exchangeLinuxDoTicket(raw)
+                            }
+                        },
+                        enabled = !state.loading && linuxDoCallbackInput.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = SynapseButtonContentPadding,
+                    ) {
+                        ButtonLabel(Icons.Outlined.Key, "提交 Linux.do 登录票据")
+                    }
                 }
             }
         }
 
-        SectionTitle(
-            text = "用网页端 JWT 登录本客户端",
+        SectionCard(
+            title = "用网页端 JWT 登录本客户端",
             subtitle = "适合已在网页端完成二次验证后手动授权本机。",
             icon = Icons.Outlined.Security,
-        )
-        val jwtClipboard = LocalClipboard.current
-        val jwtScope = rememberCoroutineScope()
-        OutlinedTextField(
-            value = state.manualJwt,
-            onValueChange = viewModel::updateManualJwt,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(112.dp),
-            minLines = 2,
-            enabled = !state.loading,
-            supportingText = { Text("仅粘贴完整 JWT，应用不会完整展示令牌内容。") },
-            label = { Text("网页端或二次验证后的 JWT") },
-            trailingIcon = {
-                IconButton(
-                    enabled = !state.loading,
-                    onClick = {
-                        jwtScope.launch {
-                            val clip = jwtClipboard.getClipEntry()?.clipData
-                            val pasted = clip
-                                ?.takeIf { it.itemCount > 0 }
-                                ?.getItemAt(0)
-                                ?.text
-                                ?.toString()
-                                ?.trim()
-                                .orEmpty()
-                            if (pasted.isNotBlank()) {
-                                viewModel.updateManualJwt(pasted)
-                            }
-                        }
-                    },
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.ContentPaste,
-                        contentDescription = "从剪贴板粘贴 JWT",
-                    )
-                }
-            },
-        )
-        OutlinedButton(
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !state.loading && state.manualJwt.isNotBlank(),
-            onClick = viewModel::issueClientTokenFromJwt,
+            secondary = true,
         ) {
-            ButtonLabel(Icons.Outlined.Security, "用 JWT 登录本客户端")
+            val jwtClipboard = LocalClipboard.current
+            val jwtScope = rememberCoroutineScope()
+            OutlinedTextField(
+                value = state.manualJwt,
+                onValueChange = viewModel::updateManualJwt,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(112.dp),
+                minLines = 2,
+                enabled = !state.loading,
+                supportingText = { Text("仅粘贴完整 JWT，应用不会完整展示令牌内容。") },
+                label = { Text("网页端或二次验证后的 JWT") },
+                trailingIcon = {
+                    IconButton(
+                        enabled = !state.loading,
+                        onClick = {
+                            jwtScope.launch {
+                                val clip = jwtClipboard.getClipEntry()?.clipData
+                                val pasted = clip
+                                    ?.takeIf { it.itemCount > 0 }
+                                    ?.getItemAt(0)
+                                    ?.text
+                                    ?.toString()
+                                    ?.trim()
+                                    .orEmpty()
+                                if (pasted.isNotBlank()) {
+                                    viewModel.updateManualJwt(pasted)
+                                }
+                            }
+                        },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ContentPaste,
+                            contentDescription = "从剪贴板粘贴 JWT",
+                        )
+                    }
+                },
+            )
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.loading && state.manualJwt.isNotBlank(),
+                contentPadding = SynapseButtonContentPadding,
+                onClick = viewModel::issueClientTokenFromJwt,
+            ) {
+                ButtonLabel(Icons.Outlined.Security, "用 JWT 登录本客户端")
+            }
         }
     }
 }
@@ -887,10 +988,17 @@ private fun QrPanel(
                 ),
             )
         }
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+        SectionCard(
+            title = "1. 扫描二维码",
+            subtitle = "打开相机扫描，或标记已扫码状态。",
+            icon = Icons.Outlined.CameraAlt,
+            emphasized = true,
+        ) {
             Button(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.loading,
+                contentPadding = SynapseButtonContentPadding,
                 onClick = { viewModel.setScannerVisible(!state.showScanner) },
             ) {
                 ButtonLabel(
@@ -901,99 +1009,113 @@ private fun QrPanel(
             OutlinedButton(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.loading && state.hasUsableQrPayload,
+                contentPadding = SynapseButtonContentPadding,
                 onClick = viewModel::markScanned,
             ) {
                 ButtonLabel(Icons.Outlined.CheckCircle, "标记网页登录已扫码")
             }
-        }
-
-        if (state.showScanner) {
-            PermissionAwareQrScanner(
-                modifier = Modifier.fillMaxWidth(),
-                onQrCode = viewModel::acceptScannedPayload,
-            )
-        }
-
-        OutlinedTextField(
-            value = state.manualQrPayload,
-            onValueChange = viewModel::updateManualQrPayload,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 128.dp),
-            minLines = 3,
-            enabled = !state.loading,
-            isError = state.qrPayloadError != null,
-            supportingText = { Text(qrPayloadHelperText) },
-            label = { Text("网页登录二维码 payload") },
-            trailingIcon = {
-                IconButton(
-                    enabled = !state.loading,
-                    onClick = {
-                        qrScope.launch {
-                            val clip = qrClipboard.getClipEntry()?.clipData
-                            val pasted = clip
-                                ?.takeIf { it.itemCount > 0 }
-                                ?.getItemAt(0)
-                                ?.text
-                                ?.toString()
-                                ?.trim()
-                                .orEmpty()
-                            if (pasted.isNotBlank()) {
-                                viewModel.updateManualQrPayload(pasted)
-                            }
-                        }
-                    },
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.ContentPaste,
-                        contentDescription = "从剪贴板粘贴二维码 payload",
-                    )
-                }
-            },
-        )
-
-        if (state.manualQrPayload.isNotBlank()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                TextButton(
-                    enabled = !state.loading,
-                    onClick = viewModel::clearQrPayload,
-                ) {
-                    ButtonLabel(Icons.Outlined.DeleteOutline, "清除二维码")
-                }
+            if (state.showScanner) {
+                PermissionAwareQrScanner(
+                    modifier = Modifier.fillMaxWidth(),
+                    onQrCode = viewModel::acceptScannedPayload,
+                )
             }
         }
 
-        state.parsedQrPayload?.let { payload ->
-            InfoCard(
-                title = "网页登录二维码详情",
-                icon = Icons.Outlined.QrCodeScanner,
-                lines = listOf(
-                    "目标站点：${payload.apiBaseUrl}",
-                    "Session：${payload.sessionId}",
-                    "过期时间：${SynapseTokenExpiry.formatInstantDisplay(payload.expiresAt)}",
-                    "状态：${if (payload.isExpired) "已过期，请重新扫码" else "有效，可继续确认"}",
-                ),
+        SectionCard(
+            title = "2. 核对 payload",
+            subtitle = "可粘贴二维码内容，并查看解析结果。",
+            icon = Icons.Outlined.QrCodeScanner,
+        ) {
+            OutlinedTextField(
+                value = state.manualQrPayload,
+                onValueChange = viewModel::updateManualQrPayload,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 128.dp),
+                minLines = 3,
+                enabled = !state.loading,
+                isError = state.qrPayloadError != null,
+                supportingText = { Text(qrPayloadHelperText) },
+                label = { Text("网页登录二维码 payload") },
+                trailingIcon = {
+                    IconButton(
+                        enabled = !state.loading,
+                        onClick = {
+                            qrScope.launch {
+                                val clip = qrClipboard.getClipEntry()?.clipData
+                                val pasted = clip
+                                    ?.takeIf { it.itemCount > 0 }
+                                    ?.getItemAt(0)
+                                    ?.text
+                                    ?.toString()
+                                    ?.trim()
+                                    .orEmpty()
+                                if (pasted.isNotBlank()) {
+                                    viewModel.updateManualQrPayload(pasted)
+                                }
+                            }
+                        },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ContentPaste,
+                            contentDescription = "从剪贴板粘贴二维码 payload",
+                        )
+                    }
+                },
             )
+
+            if (state.manualQrPayload.isNotBlank()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(
+                        enabled = !state.loading,
+                        onClick = viewModel::clearQrPayload,
+                    ) {
+                        ButtonLabel(Icons.Outlined.DeleteOutline, "清除二维码")
+                    }
+                }
+            }
+
+            state.parsedQrPayload?.let { payload ->
+                InfoCard(
+                    title = "网页登录二维码详情",
+                    icon = Icons.Outlined.QrCodeScanner,
+                    lines = listOf(
+                        "目标站点：${payload.apiBaseUrl}",
+                        "Session：${payload.sessionId}",
+                        "过期时间：${SynapseTokenExpiry.formatInstantDisplay(payload.expiresAt)}",
+                        "状态：${if (payload.isExpired) "已过期，请重新扫码" else "有效，可继续确认"}",
+                    ),
+                )
+            }
         }
 
-        Button(
-            modifier = Modifier.fillMaxWidth(),
-            enabled = canConfirmWebLogin,
-            onClick = { showConfirmWebLogin = true },
+        SectionCard(
+            title = "3. 确认登录",
+            subtitle = "确认前请核对账号与目标站点。",
+            icon = Icons.AutoMirrored.Outlined.Login,
+            emphasized = true,
         ) {
-            if (state.loading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                )
-                Spacer(modifier = Modifier.size(8.dp))
-                Text("确认中…")
-            } else {
-                ButtonLabel(Icons.AutoMirrored.Outlined.Login, "确认登录网页端")
+            Button(
+                modifier = Modifier.fillMaxWidth(),
+                enabled = canConfirmWebLogin,
+                contentPadding = SynapseButtonContentPadding,
+                onClick = { showConfirmWebLogin = true },
+            ) {
+                if (state.loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("确认中…")
+                } else {
+                    ButtonLabel(Icons.AutoMirrored.Outlined.Login, "确认登录网页端")
+                }
             }
         }
 
@@ -1038,12 +1160,13 @@ private fun WebLoginAccountPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text("选择网页登录账号") },
         text = {
+            val spacing = LocalPanelSpacing.current
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 420.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
             ) {
                 Text(
                     text = "目标站点：$targetSite",
@@ -1079,6 +1202,7 @@ private fun WebLoginAccountChoice(
     enabled: Boolean,
     onSelect: () -> Unit,
 ) {
+    val spacing = LocalPanelSpacing.current
     val credentialLabel = when {
         account.hasJwt && account.hasClientLoginToken -> "可用凭据：JWT + SML"
         account.hasJwt -> "可用凭据：JWT"
@@ -1089,18 +1213,18 @@ private fun WebLoginAccountChoice(
         modifier = Modifier.fillMaxWidth(),
         enabled = enabled,
         onClick = onSelect,
-        shape = RoundedCornerShape(12.dp),
-        contentPadding = PaddingValues(14.dp),
+        shape = MaterialTheme.shapes.medium,
+        contentPadding = PaddingValues(spacing.cardPadding),
     ) {
         Icon(
             imageVector = if (active) Icons.Outlined.VerifiedUser else Icons.Outlined.AccountCircle,
             contentDescription = null,
             modifier = Modifier.size(22.dp),
         )
-        Spacer(modifier = Modifier.size(12.dp))
+        Spacer(modifier = Modifier.size(spacing.itemSpacing + 2.dp))
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing + 1.dp),
             horizontalAlignment = Alignment.Start,
         ) {
             Text(
@@ -1150,10 +1274,17 @@ private fun SessionPanel(
                 ),
             )
         }
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+        SectionCard(
+            title = "会话操作",
+            subtitle = "静默登录与令牌撤销。",
+            icon = Icons.Outlined.Devices,
+            emphasized = true,
+        ) {
             Button(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.loading && state.hasCurrentClientLoginToken,
+                contentPadding = SynapseButtonContentPadding,
                 onClick = viewModel::silentLogin,
             ) {
                 if (state.loading) {
@@ -1171,17 +1302,27 @@ private fun SessionPanel(
             OutlinedButton(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.loading && state.hasCurrentClientLoginToken,
+                contentPadding = SynapseButtonContentPadding,
                 onClick = { showRevokeConfirmation = true },
             ) {
                 ButtonLabel(Icons.Outlined.Key, "撤销本客户端令牌")
             }
         }
-        OutlinedButton(
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !state.loading && state.hasStoredAccount,
-            onClick = { showClearConfirmation = true },
+
+        SectionCard(
+            title = "危险操作",
+            subtitle = "清理后需要重新授权本机。",
+            icon = Icons.Outlined.DeleteOutline,
+            secondary = true,
         ) {
-            ButtonLabel(Icons.Outlined.DeleteOutline, "清理本地凭据")
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.loading && state.hasStoredAccount,
+                contentPadding = SynapseButtonContentPadding,
+                onClick = { showClearConfirmation = true },
+            ) {
+                ButtonLabel(Icons.Outlined.DeleteOutline, "清理本地凭据")
+            }
         }
         OssCreditsFooter()
     }
@@ -1219,31 +1360,32 @@ private fun CredentialSummary(
     viewModel: SynapseLoginViewModel,
     title: String,
 ) {
+    val spacing = LocalPanelSpacing.current
     val accounts = state.credentials.accounts
     if (accounts.isEmpty()) return
 
     val active = state.credentials.activeAccount ?: accounts.first()
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
-            // Tighter padding than the old 16dp; token availability is already shown once
-            // in SynapseAppHeader's SML pill — avoid a second "令牌·可用" chip here.
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            // Token availability is already shown once in SynapseAppHeader's SML pill —
+            // avoid a second "令牌·可用" chip here.
+            modifier = Modifier.padding(spacing.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
             ) {
                 Box(
                     modifier = Modifier
                         .size(30.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(MaterialTheme.shapes.small)
                         .background(MaterialTheme.colorScheme.secondaryContainer),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -1254,7 +1396,10 @@ private fun CredentialSummary(
                         tint = MaterialTheme.colorScheme.secondary,
                     )
                 }
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing),
+                ) {
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleSmall,
@@ -1321,17 +1466,21 @@ private fun AccountSelectorRow(
     active: Boolean,
     onSelect: () -> Unit,
 ) {
+    val spacing = LocalPanelSpacing.current
     val clipboard = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = MaterialTheme.shapes.medium,
+        color = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
     ) {
         Row(
-            modifier = Modifier.padding(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(
+                horizontal = spacing.rowPaddingHorizontal,
+                vertical = spacing.rowPaddingVertical,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -1367,23 +1516,27 @@ private fun CopyableLine(
     value: String,
     copyValue: String = value,
 ) {
+    val spacing = LocalPanelSpacing.current
     val clipboard = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
     val canCopy = copyValue.isNotBlank() && copyValue != "未返回" && copyValue != "未保存"
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(
+                horizontal = spacing.rowPaddingHorizontal,
+                vertical = spacing.rowPaddingVertical,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
+                verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing),
             ) {
                 Text(
                     text = label,
@@ -1458,6 +1611,100 @@ private fun ConfirmActionDialog(
     )
 }
 
+/**
+ * Viewport-driven page + component metrics for tab panels.
+ * Page metrics space major siblings; component tokens space content *inside* cards/rows/groups
+ * so form fields that already inherit [sectionSpacing] are not double-padded.
+ */
+internal data class PanelSpacing(
+    val pagePadding: Dp,
+    val sectionSpacing: Dp,
+    val compactHeader: Boolean,
+    val shortViewport: Boolean,
+    /** Gap between stacked actions / related controls inside a local group. */
+    val itemSpacing: Dp,
+    /** Internal padding for cards (CredentialSummary, InfoCard, SectionCard, empty states). */
+    val cardPadding: Dp,
+    /** Horizontal padding for dense rows (CopyableLine, account rows, status pills). */
+    val rowPaddingHorizontal: Dp,
+    /** Vertical padding for dense rows / pills / banners. */
+    val rowPaddingVertical: Dp,
+    /** Title/subtitle stack gap (header, section titles, label stacks). */
+    val tightTextSpacing: Dp,
+)
+
+internal val LocalPanelSpacing = compositionLocalOf {
+    // Fallback matches typical-phone tier when outside PanelColumn.
+    PanelSpacing(
+        pagePadding = 16.dp,
+        sectionSpacing = 12.dp,
+        compactHeader = false,
+        shortViewport = false,
+        itemSpacing = 10.dp,
+        cardPadding = 14.dp,
+        rowPaddingHorizontal = 14.dp,
+        rowPaddingVertical = 10.dp,
+        tightTextSpacing = 3.dp,
+    )
+}
+
+private fun panelSpacingFor(maxWidth: Dp, maxHeight: Dp): PanelSpacing {
+    val shortViewport = maxHeight < 640.dp
+    val typicalPhone = maxHeight < 800.dp
+    val pagePadding = when {
+        shortViewport -> 12.dp
+        typicalPhone -> 16.dp
+        else -> 18.dp
+    }
+    val sectionSpacing = when {
+        shortViewport -> 10.dp
+        typicalPhone -> 12.dp
+        else -> 14.dp
+    }
+    val compactHeader = when {
+        shortViewport -> true
+        typicalPhone -> maxWidth < 400.dp || maxHeight < 720.dp
+        else -> false
+    }
+    // Component density tracks viewport, but stays slightly tighter than page section gaps.
+    val itemSpacing = when {
+        shortViewport -> 8.dp
+        typicalPhone -> 10.dp
+        else -> 12.dp
+    }
+    val cardPadding = when {
+        shortViewport -> 12.dp
+        typicalPhone -> 14.dp
+        else -> 16.dp
+    }
+    val rowPaddingHorizontal = when {
+        shortViewport -> 12.dp
+        typicalPhone -> 14.dp
+        else -> 14.dp
+    }
+    val rowPaddingVertical = when {
+        shortViewport -> 8.dp
+        typicalPhone -> 10.dp
+        else -> 12.dp
+    }
+    val tightTextSpacing = when {
+        shortViewport -> 2.dp
+        typicalPhone -> 3.dp
+        else -> 4.dp
+    }
+    return PanelSpacing(
+        pagePadding = pagePadding,
+        sectionSpacing = sectionSpacing,
+        compactHeader = compactHeader,
+        shortViewport = shortViewport,
+        itemSpacing = itemSpacing,
+        cardPadding = cardPadding,
+        rowPaddingHorizontal = rowPaddingHorizontal,
+        rowPaddingVertical = rowPaddingVertical,
+        tightTextSpacing = tightTextSpacing,
+    )
+}
+
 @Composable
 private fun PanelColumn(
     state: SynapseUiState,
@@ -1465,33 +1712,123 @@ private fun PanelColumn(
     content: @Composable () -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        // Prefer compact header on typical phones (portrait ~640–800 dp height).
-        val compactHeader = maxHeight < 640.dp
+        val spacing = panelSpacingFor(maxWidth = maxWidth, maxHeight = maxHeight)
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(PaddingValues(8.dp)),
-        ) {
-            Column(
+        CompositionLocalProvider(LocalPanelSpacing provides spacing) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 760.dp)
-                    .align(Alignment.TopCenter),
-                verticalArrangement = Arrangement.spacedBy(if (compactHeader) 4.dp else 6.dp),
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(PaddingValues(spacing.pagePadding)),
             ) {
-                SynapseAppHeader(
-                    state = state,
-                    compact = compactHeader,
-                )
-                StatusBanner(
-                    state = state,
-                    onDismiss = onDismissFeedback,
-                )
-                content()
-                Spacer(Modifier.height(4.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 760.dp)
+                        .align(Alignment.TopCenter),
+                    verticalArrangement = Arrangement.spacedBy(spacing.sectionSpacing),
+                ) {
+                    SynapseAppHeader(
+                        state = state,
+                        compact = spacing.compactHeader,
+                    )
+                    StatusBanner(
+                        state = state,
+                        onDismiss = onDismissFeedback,
+                    )
+                    content()
+                    Spacer(modifier = Modifier.height(spacing.sectionSpacing))
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun SectionCard(
+    title: String? = null,
+    subtitle: String? = null,
+    icon: ImageVector? = null,
+    emphasized: Boolean = false,
+    secondary: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val spacing = LocalPanelSpacing.current
+    val containerColor = when {
+        emphasized -> MaterialTheme.colorScheme.surface
+        secondary -> MaterialTheme.colorScheme.surfaceContainerLow
+        else -> MaterialTheme.colorScheme.surfaceContainer
+    }
+    val borderColor = when {
+        emphasized -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        secondary -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+        else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
+    }
+    val elevation = if (emphasized) 1.dp else 0.dp
+    val iconContainer = if (emphasized) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+    val iconTint = if (emphasized) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation),
+        border = BorderStroke(1.dp, borderColor),
+    ) {
+        Column(
+            modifier = Modifier.padding(spacing.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
+        ) {
+            if (title != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
+                ) {
+                    if (icon != null) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(MaterialTheme.shapes.small)
+                                .background(iconContainer),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = iconTint,
+                            )
+                        }
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing),
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (subtitle != null) {
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+            content()
         }
     }
 }
@@ -1502,16 +1839,17 @@ private fun SectionTitle(
     subtitle: String? = null,
     icon: ImageVector? = null,
 ) {
+    val spacing = LocalPanelSpacing.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
     ) {
         if (icon != null) {
             Box(
                 modifier = Modifier
                     .size(34.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(MaterialTheme.shapes.medium)
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1525,7 +1863,7 @@ private fun SectionTitle(
         }
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing),
         ) {
             Text(
                 text = text,
@@ -1563,18 +1901,20 @@ private fun InfoCard(
     lines: List<String>,
     icon: ImageVector = Icons.Outlined.Info,
 ) {
+    val spacing = LocalPanelSpacing.current
+    // surfaceContainerHigh lifts nested InfoCards inside SectionCard/surfaceContainer parents.
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(spacing.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
@@ -1606,24 +1946,44 @@ private fun IllustratedEmptyState(
     title: String,
     lines: List<String>,
 ) {
+    val spacing = LocalPanelSpacing.current
+    // Scroll parents report infinite maxHeight, so shrink from PanelSpacing short/compact flags.
+    val illustrationModifier = when {
+        spacing.shortViewport -> {
+            Modifier
+                .fillMaxWidth(0.7f)
+                .heightIn(max = 112.dp)
+                .aspectRatio(16 / 9f)
+        }
+        spacing.compactHeader -> {
+            Modifier
+                .fillMaxWidth(0.82f)
+                .heightIn(max = 148.dp)
+                .aspectRatio(16 / 9f)
+        }
+        else -> {
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16 / 9f)
+                .padding(horizontal = spacing.itemSpacing)
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(spacing.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Image(
                 imageVector = illustration,
                 contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16 / 9f)
-                    .padding(horizontal = 8.dp),
+                modifier = illustrationModifier,
                 contentScale = ContentScale.Fit,
             )
             Text(
@@ -1647,23 +2007,41 @@ private fun IllustratedEmptyState(
 @Composable
 private fun OssCreditsFooter() {
     val uriHandler = LocalUriHandler.current
+    val spacing = LocalPanelSpacing.current
+    val illustrationModifier = when {
+        spacing.shortViewport -> {
+            Modifier
+                .fillMaxWidth(0.58f)
+                .heightIn(max = 96.dp)
+                .aspectRatio(16 / 9f)
+        }
+        spacing.compactHeader -> {
+            Modifier
+                .fillMaxWidth(0.64f)
+                .heightIn(max = 128.dp)
+                .aspectRatio(16 / 9f)
+        }
+        else -> {
+            Modifier
+                .fillMaxWidth(0.72f)
+                .aspectRatio(16 / 9f)
+        }
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(spacing.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Image(
                 imageVector = DynamicColorImageVectors.coder(),
                 contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth(0.72f)
-                    .aspectRatio(16 / 9f),
+                modifier = illustrationModifier,
                 contentScale = ContentScale.Fit,
             )
             Text(
