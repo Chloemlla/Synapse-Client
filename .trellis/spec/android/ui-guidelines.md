@@ -34,6 +34,7 @@ Reusable local patterns:
 SectionTitle(text = "...", subtitle = "...", icon = Icons.Outlined.Security)
 ButtonLabel(Icons.AutoMirrored.Outlined.Login, "...")
 StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active = true)
+PanelColumn(state, onDismissFeedback) { /* tab body */ } // derives PanelSpacing from BoxWithConstraints
 ```
 
 ### 3. Contracts
@@ -47,6 +48,15 @@ StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active
 - Crash reporting is provided by the published `com.chloemlla.lumen:lumen-crash` SDK from GitHub Packages. Host product copy may override title/message/share subject via `LumenCrashConfig`; do not reintroduce app-local crash core/UI under `core/crash` or `ui/CrashReportScreen`. Sanitization of paths, content/file URIs, bearer credentials, token/password query parameters, and API-key formats is owned by the SDK before persistence or display.
 - Keep panels constrained for larger screens and scrollable for mobile screens; text must use `maxLines` and `TextOverflow.Ellipsis` where long account/device/token values appear.
 - Large summary/status regions must live inside the tab's scrollable content and switch to a compact form on low-height layouts such as landscape, so users can always scroll past them to the form/actions below.
+- **Adaptive page spacing**: derive `pagePadding`, `sectionSpacing`, and `compactHeader` from `PanelColumn`'s `BoxWithConstraints` (`maxHeight` / `maxWidth`), not a single fixed density. Major tab blocks should not look glued together on portrait phones (target ≥ ~10–12 dp between sections). Suggested tiers:
+
+  | Viewport | pagePadding | sectionSpacing | compactHeader |
+  |----------|-------------|----------------|---------------|
+  | height < 640 dp (short / landscape) | 12 dp | 10 dp | true |
+  | height < 800 dp (typical phone) | 16 dp | 12 dp | width < 400 dp or height < 720 dp |
+  | else (tall phone / tablet width) | 18 dp | 14 dp | false |
+
+  Header internal: compact outer ≥ 12 dp, vertical ≥ 6 dp; non-compact outer ≥ 14 dp, vertical ≥ 8 dp. Status banners must not add a fixed extra bottom pad that fights `sectionSpacing`. Empty-state / credits illustrations shrink on short or compact viewports so form actions stay reachable without endless scroll. Keep `widthIn(max = 760.dp)` centering on large screens.
 - Do not add visible instructional text about internal design choices, keyboard shortcuts, or implementation details.
 - Status and error banners must be dismissible when not loading; call a ViewModel clear-feedback action rather than leaving stale banners permanently visible. Failure banners may be multi-line: keep top alignment for error details and soft-wrap the full diagnostic text from `SynapseFailureMessage` / API error formatter.
 - Password fields must support show/hide via a trailing visibility icon; never log or mirror the password value elsewhere.
@@ -65,7 +75,9 @@ StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active
 | New credential/token display | Show availability or preview only; never render the full secret value. |
 | Crash report or breadcrumb content | Use `LumenCrash.recordBreadcrumb` / `LumenCrash.record`; rely on the SDK sanitizer and do not fork app-local crash report builders. |
 | Long account, device, URL, or token-adjacent text | Cap lines and use ellipsis. |
-| Landscape or low-height screen | Keep header/status content scrollable and compact; do not pin a large banner above the scroll area. |
+| Landscape or low-height screen | Keep header/status content scrollable and compact; do not pin a large banner above the scroll area. Compact still keeps ≥ ~10–12 dp page padding / section gaps. |
+| New or revised tab panel spacing | Drive padding/gaps from viewport via `PanelColumn` / `PanelSpacing`; do not hardcode 8 / 4–6 dp page density. |
+| Empty-state illustration on short height | Shrink illustration footprint (width fraction / max height) so fields remain reachable. |
 | New scanner/permission UI | Keep the permission rationale visible before launching permission request. |
 | Dismissible status banner | Provide a close action when status/error is non-loading; clearing must not wipe form input. |
 | Password field | Trailing visibility toggle; Done IME may submit only when login preconditions pass. |
@@ -123,11 +135,18 @@ InfoCard(
 )
 
 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-    val compactHeader = maxHeight < 520.dp
-    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-        SynapseAppHeader(state = state, compact = compactHeader)
-        StatusBanner(state = state)
-        TabContent()
+    val spacing = panelSpacingFor(maxWidth = maxWidth, maxHeight = maxHeight)
+    CompositionLocalProvider(LocalPanelSpacing provides spacing) {
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(spacing.pagePadding),
+            verticalArrangement = Arrangement.spacedBy(spacing.sectionSpacing),
+        ) {
+            SynapseAppHeader(state = state, compact = spacing.compactHeader)
+            StatusBanner(state = state)
+            TabContent()
+        }
     }
 }
 ```

@@ -74,6 +74,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -97,6 +99,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chloemlla.synapse.mobile.BuildConfig
@@ -199,9 +202,9 @@ private fun SynapseAppHeader(
     val accountName = activeAccount?.displayName ?: state.credentials.displayName ?: "未登录"
     val tokenReady = state.hasCurrentClientLoginToken
     val qrReady = state.hasUsableQrPayload && state.hasAnyWebLoginCredential
-    // Compact phones: prefer denser header; token availability is shown once via the SML pill.
-    val outerPadding = if (compact) 8.dp else 10.dp
-    val verticalSpacing = if (compact) 4.dp else 6.dp
+    // Compact keeps pills collapsed, but still leaves readable outer/vertical breathing room.
+    val outerPadding = if (compact) 12.dp else 14.dp
+    val verticalSpacing = if (compact) 6.dp else 8.dp
     val iconSize = if (compact) 32.dp else 40.dp
 
     Surface(
@@ -356,10 +359,9 @@ private fun StatusBanner(
     if (!state.loading && state.status.isBlank() && state.error == null) return
 
     val isError = state.error != null
+    // Bottom gap comes from PanelColumn sectionSpacing — avoid a fixed extra glue pad.
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 6.dp),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         color = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
         border = BorderStroke(
@@ -1458,6 +1460,52 @@ private fun ConfirmActionDialog(
     )
 }
 
+/**
+ * Viewport-driven page metrics for tab panels.
+ * Derived from [BoxWithConstraints] so portrait phones breathe more while short/landscape stays compact.
+ */
+private data class PanelSpacing(
+    val pagePadding: Dp,
+    val sectionSpacing: Dp,
+    val compactHeader: Boolean,
+    val shortViewport: Boolean,
+)
+
+private val LocalPanelSpacing = compositionLocalOf {
+    PanelSpacing(
+        pagePadding = 16.dp,
+        sectionSpacing = 12.dp,
+        compactHeader = false,
+        shortViewport = false,
+    )
+}
+
+private fun panelSpacingFor(maxWidth: Dp, maxHeight: Dp): PanelSpacing {
+    val shortViewport = maxHeight < 640.dp
+    val typicalPhone = maxHeight < 800.dp
+    val pagePadding = when {
+        shortViewport -> 12.dp
+        typicalPhone -> 16.dp
+        else -> 18.dp
+    }
+    val sectionSpacing = when {
+        shortViewport -> 10.dp
+        typicalPhone -> 12.dp
+        else -> 14.dp
+    }
+    val compactHeader = when {
+        shortViewport -> true
+        typicalPhone -> maxWidth < 400.dp || maxHeight < 720.dp
+        else -> false
+    }
+    return PanelSpacing(
+        pagePadding = pagePadding,
+        sectionSpacing = sectionSpacing,
+        compactHeader = compactHeader,
+        shortViewport = shortViewport,
+    )
+}
+
 @Composable
 private fun PanelColumn(
     state: SynapseUiState,
@@ -1465,32 +1513,33 @@ private fun PanelColumn(
     content: @Composable () -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        // Prefer compact header on typical phones (portrait ~640–800 dp height).
-        val compactHeader = maxHeight < 640.dp
+        val spacing = panelSpacingFor(maxWidth = maxWidth, maxHeight = maxHeight)
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(PaddingValues(8.dp)),
-        ) {
-            Column(
+        CompositionLocalProvider(LocalPanelSpacing provides spacing) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 760.dp)
-                    .align(Alignment.TopCenter),
-                verticalArrangement = Arrangement.spacedBy(if (compactHeader) 4.dp else 6.dp),
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(PaddingValues(spacing.pagePadding)),
             ) {
-                SynapseAppHeader(
-                    state = state,
-                    compact = compactHeader,
-                )
-                StatusBanner(
-                    state = state,
-                    onDismiss = onDismissFeedback,
-                )
-                content()
-                Spacer(Modifier.height(4.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 760.dp)
+                        .align(Alignment.TopCenter),
+                    verticalArrangement = Arrangement.spacedBy(spacing.sectionSpacing),
+                ) {
+                    SynapseAppHeader(
+                        state = state,
+                        compact = spacing.compactHeader,
+                    )
+                    StatusBanner(
+                        state = state,
+                        onDismiss = onDismissFeedback,
+                    )
+                    content()
+                    Spacer(modifier = Modifier.height(spacing.sectionSpacing))
+                }
             }
         }
     }
@@ -1606,6 +1655,31 @@ private fun IllustratedEmptyState(
     title: String,
     lines: List<String>,
 ) {
+    val spacing = LocalPanelSpacing.current
+    val cardPadding = if (spacing.shortViewport) 12.dp else 16.dp
+    val contentSpacing = if (spacing.shortViewport) 8.dp else 10.dp
+    // Scroll parents report infinite maxHeight, so shrink from PanelSpacing short/compact flags.
+    val illustrationModifier = when {
+        spacing.shortViewport -> {
+            Modifier
+                .fillMaxWidth(0.7f)
+                .heightIn(max = 112.dp)
+                .aspectRatio(16 / 9f)
+        }
+        spacing.compactHeader -> {
+            Modifier
+                .fillMaxWidth(0.82f)
+                .heightIn(max = 148.dp)
+                .aspectRatio(16 / 9f)
+        }
+        else -> {
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16 / 9f)
+                .padding(horizontal = 8.dp)
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -1613,17 +1687,14 @@ private fun IllustratedEmptyState(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(cardPadding),
+            verticalArrangement = Arrangement.spacedBy(contentSpacing),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Image(
                 imageVector = illustration,
                 contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16 / 9f)
-                    .padding(horizontal = 8.dp),
+                modifier = illustrationModifier,
                 contentScale = ContentScale.Fit,
             )
             Text(
@@ -1647,6 +1718,27 @@ private fun IllustratedEmptyState(
 @Composable
 private fun OssCreditsFooter() {
     val uriHandler = LocalUriHandler.current
+    val spacing = LocalPanelSpacing.current
+    val cardPadding = if (spacing.shortViewport) 12.dp else 16.dp
+    val illustrationModifier = when {
+        spacing.shortViewport -> {
+            Modifier
+                .fillMaxWidth(0.58f)
+                .heightIn(max = 96.dp)
+                .aspectRatio(16 / 9f)
+        }
+        spacing.compactHeader -> {
+            Modifier
+                .fillMaxWidth(0.64f)
+                .heightIn(max = 128.dp)
+                .aspectRatio(16 / 9f)
+        }
+        else -> {
+            Modifier
+                .fillMaxWidth(0.72f)
+                .aspectRatio(16 / 9f)
+        }
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -1654,16 +1746,14 @@ private fun OssCreditsFooter() {
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(cardPadding),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Image(
                 imageVector = DynamicColorImageVectors.coder(),
                 contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth(0.72f)
-                    .aspectRatio(16 / 9f),
+                modifier = illustrationModifier,
                 contentScale = ContentScale.Fit,
             )
             Text(
