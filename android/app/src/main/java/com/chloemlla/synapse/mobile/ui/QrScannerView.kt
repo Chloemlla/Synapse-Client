@@ -187,6 +187,7 @@ private fun HmsRemoteQrScanner(
     onBackendUnavailable: () -> Unit,
 ) {
     val context = LocalContext.current
+    // RemoteView.Builder.setContext requires an Activity (not a bare Context).
     val activity = remember(context) { context.findActivity() }
     val consumed = remember { AtomicBoolean(false) }
     val remoteViewHolder = remember { arrayOfNulls<RemoteView>(1) }
@@ -201,6 +202,15 @@ private fun HmsRemoteQrScanner(
         } else {
             onBackendUnavailable()
         }
+    }
+
+    // Without a host Activity HMS cannot build RemoteView — fall back immediately.
+    if (activity == null) {
+        DisposableEffect(Unit) {
+            onBackendUnavailable()
+            onDispose { }
+        }
+        return
     }
 
     DisposableEffect(activity) {
@@ -255,7 +265,7 @@ private fun HmsRemoteQrScanner(
                     height / 2 + scanFrameSize / 2,
                 )
                 val remoteView = RemoteView.Builder()
-                    .setContext(activity ?: viewContext)
+                    .setContext(activity)
                     .setBoundingBox(rect)
                     .setFormat(HmsScan.QRCODE_SCAN_TYPE)
                     .build()
