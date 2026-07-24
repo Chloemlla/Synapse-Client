@@ -8,6 +8,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Refresh
@@ -151,7 +151,7 @@ private fun TurnstileCard(
     val spacing = LocalPanelSpacing.current
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = if (error) {
                 MaterialTheme.colorScheme.errorContainer
@@ -208,7 +208,13 @@ private fun TurnstileVerificationView(
     bridge.onExpiredCallback = onExpired
     bridge.onErrorCallback = onError
 
-    val loadKey = TurnstileLoadKey(siteKey = siteKey, pageBaseUrl = pageBaseUrl, refreshKey = refreshKey)
+    val widgetTheme = if (isSystemInDarkTheme()) "dark" else "light"
+    val loadKey = TurnstileLoadKey(
+        siteKey = siteKey,
+        pageBaseUrl = pageBaseUrl,
+        refreshKey = refreshKey,
+        theme = widgetTheme,
+    )
     AndroidView(
         modifier = Modifier
             .fillMaxWidth()
@@ -231,7 +237,7 @@ private fun TurnstileVerificationView(
                 webView.tag = loadKey
                 webView.loadDataWithBaseURL(
                     pageBaseUrl.trim().trimEnd('/').ifBlank { DEFAULT_TURNSTILE_BASE_URL },
-                    buildTurnstileHtml(siteKey),
+                    buildTurnstileHtml(siteKey = siteKey, theme = widgetTheme),
                     "text/html",
                     "UTF-8",
                     null,
@@ -245,6 +251,7 @@ private data class TurnstileLoadKey(
     val siteKey: String,
     val pageBaseUrl: String,
     val refreshKey: Int,
+    val theme: String,
 )
 
 private class TurnstileBridge {
@@ -274,8 +281,9 @@ private class TurnstileBridge {
     }
 }
 
-private fun buildTurnstileHtml(siteKey: String): String {
+private fun buildTurnstileHtml(siteKey: String, theme: String): String {
     val quotedSiteKey = JSONObject.quote(siteKey)
+    val quotedTheme = JSONObject.quote(if (theme == "dark") "dark" else "light")
     return """
         <!doctype html>
         <html>
@@ -317,7 +325,7 @@ private fun buildTurnstileHtml(siteKey: String): String {
                 try {
                   window.turnstile.render('#turnstile-container', {
                     sitekey: $quotedSiteKey,
-                    theme: 'light',
+                    theme: $quotedTheme,
                     size: 'normal',
                     callback: function (token) {
                       window.$TURNSTILE_BRIDGE_NAME.onVerify(token || '');

@@ -32,6 +32,7 @@ Reusable local patterns:
 
 ```kotlin
 SectionTitle(text = "...", subtitle = "...", icon = Icons.Outlined.Security)
+SectionCard(title = "...", subtitle = "...", icon = ..., emphasized = true) { /* grouped controls */ }
 ButtonLabel(Icons.AutoMirrored.Outlined.Login, "...")
 StatusPill(icon = Icons.Outlined.Key, label = "SML", value = "已保存", active = true)
 PanelColumn(state, onDismissFeedback) { /* tab body */ } // derives PanelSpacing from BoxWithConstraints
@@ -39,8 +40,12 @@ PanelColumn(state, onDismissFeedback) { /* tab body */ } // derives PanelSpacing
 
 ### 3. Contracts
 
-- Use `SynapseMobileTheme` as the single source for app colors and shapes.
-- Prefer Material 3 tonal surfaces (`surfaceContainer`, `primaryContainer`, `secondaryContainer`, `errorContainer`) over ad-hoc colors.
+- Use `SynapseMobileTheme` as the single source for app colors and shapes. Theme must provide matching light + dark schemes via `isSystemInDarkTheme()`; keep the blue/teal brand family and lift cards from the page background with tonal surface layers (no ad-hoc `Color.White` card fills).
+- Prefer Material 3 tonal surfaces (`surface`, `surfaceContainer*`, `primaryContainer`, `secondaryContainer`, `errorContainer`) over ad-hoc colors. Prefer `MaterialTheme.shapes` (large ≈ 14 dp panels, medium ≈ 10–12 dp rows/pills) over scattered one-off radii.
+- **Section grouping**: multi-step tab panels (Login / QR / Session) wrap related controls in `SectionCard` rather than one flat field list. Typical Login groups: primary password path (+ in-flow 2FA) as `emphasized = true`; passwordless/provider sections (Passkey / Google / Linux.do) as `secondary = true` with outlined CTAs; advanced JWT as `secondary = true`. QR stages: scan → payload/details → confirm. Session: primary session actions vs destructive clear (`secondary`). Nested `InfoCard` / Turnstile cards use a higher tonal layer (`surfaceContainerHigh` / `surfaceContainer`) so they lift inside parent section cards.
+- **Action hierarchy**: filled `Button` only for the main path of a stage (password login, QR scan open, QR confirm, silent login, in-flow 2FA complete); `OutlinedButton` / `TextButton` for secondary providers and alternate actions; destructive stays outlined + confirmation dialog. Prefer shared roomier content padding (`SynapseButtonContentPadding`, vertical ~12 dp) on primary/secondary action buttons.
+- **App chrome**: top app bar + tab row share one surface color; optional thin divider under tabs; selected tab uses primary content color + indicator (no heavy double borders).
+- **Header / status polish**: active `StatusPill` uses `primaryContainer`; inactive uses quieter surfaceVariant emphasis. StatusBanner stays dismissible with softer success and clearer error hierarchy.
 - Keep cards at 14-18 dp radius for screen-level panels and 10-12 dp radius for rows/pills.
 - Buttons that perform clear actions should include an icon and short label via the local button-label pattern.
 - Authentication, QR, session, scanner, and destructive-action states must use semantic icons and colors.
@@ -58,7 +63,7 @@ PanelColumn(state, onDismissFeedback) { /* tab body */ } // derives PanelSpacing
 
   Component token roles:
   - `itemSpacing` — stacked actions / related controls inside a local group (QR/session button stacks, card internal stacks).
-  - `cardPadding` — CredentialSummary, InfoCard, empty-state, credits, Turnstile cards.
+  - `cardPadding` — CredentialSummary, InfoCard, SectionCard, empty-state, credits, Turnstile cards.
   - `rowPaddingHorizontal` / `rowPaddingVertical` — CopyableLine, account selector rows, status banners (pills may be ~2 dp denser).
   - `tightTextSpacing` — title/subtitle stacks (header, SectionTitle, label stacks).
 
@@ -75,9 +80,11 @@ PanelColumn(state, onDismissFeedback) { /* tab body */ } // derives PanelSpacing
 
 | Condition | Required handling |
 |-----------|-------------------|
-| New auth or session action button | Add an icon and keep the label short enough for mobile. |
-| New information/status card | Use tonal surface, consistent radius, and semantic icon. |
-| New destructive action | Require a confirmation dialog with warning icon and explicit confirm text. |
+| New auth or session action button | Add an icon and keep the label short enough for mobile. Prefer filled primary vs outlined secondary hierarchy. |
+| Multi-step panel controls (Login/QR/Session) | Group related fields/actions in `SectionCard`; do not leave one flat ungrouped list. |
+| Theme / surface change | Provide light + dark schemes; cards must lift from background via tonal surfaces, not flat white. |
+| New information/status card | Use tonal surface, consistent theme shape radius, and semantic icon. |
+| New destructive action | Require a confirmation dialog with warning icon and explicit confirm text; keep outlined, secondary visually. |
 | New credential/token display | Show availability or preview only; never render the full secret value. |
 | Crash report or breadcrumb content | Use `LumenCrash.recordBreadcrumb` / `LumenCrash.record`; rely on the SDK sanitizer and do not fork app-local crash report builders. |
 | Long account, device, URL, or token-adjacent text | Cap lines and use ellipsis. |
@@ -93,11 +100,11 @@ PanelColumn(state, onDismissFeedback) { /* tab body */ } // derives PanelSpacing
 
 ### 5. Good/Base/Bad Cases
 
-Good: a login action uses a full-width Material button with `Icons.AutoMirrored.Outlined.Login`, a short Chinese label, and disabled state tied to `SynapseUiState`.
+Good: a login action uses a full-width filled Material button with `Icons.AutoMirrored.Outlined.Login`, a short Chinese label, disabled state tied to `SynapseUiState`, and lives inside an emphasized `SectionCard` with related fields.
 
-Base: an informational QR detail card uses `surfaceContainer`, a QR icon, and truncates long values.
+Base: an informational QR detail card uses `surfaceContainer`, a QR icon, and truncates long values; QR scan/payload/confirm sit in staged section cards.
 
-Bad: a naked text-only button in a dense form, a raw `clientLoginToken` rendered in `Text`, or a destructive action running immediately without confirmation.
+Bad: a naked text-only button in a dense form, a raw `clientLoginToken` rendered in `Text`, a destructive action running immediately without confirmation, light-only theme with flat white cards, or an ungrouped login field list with no primary/secondary action distinction.
 
 ### 6. Tests Required
 
