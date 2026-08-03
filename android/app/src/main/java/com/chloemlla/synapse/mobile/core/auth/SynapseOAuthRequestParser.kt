@@ -164,12 +164,14 @@ internal object SynapseOAuthRequestParser {
     private fun safeRedirectUri(uri: Uri): String {
         val raw = uri.getQueryParameter("redirect_uri")?.trim()
             ?: throw IllegalArgumentException("OAuth 缺少 redirect_uri。")
-        require(isSafeRedirectBase(raw)) { "OAuth redirect_uri 必须使用安全的已登记地址。" }
+        require(isSafeRedirectBase(raw, uri.getQueryParameter("client_id"))) {
+            "OAuth redirect_uri 必须使用安全的已登记地址。"
+        }
         return raw
     }
 
-    private fun isSafeRedirectBase(raw: String): Boolean = runCatching {
-        isAllowedRedirectUri(raw, uri.getQueryParameter("client_id")) && Uri.parse(raw).queryParameterNames.none {
+    private fun isSafeRedirectBase(raw: String, clientId: String? = null): Boolean = runCatching {
+        isAllowedRedirectUri(raw, clientId) && Uri.parse(raw).queryParameterNames.none {
             it.lowercase() in SENSITIVE_PARAMETERS || it in CALLBACK_PARAMETERS
         }
     }.getOrDefault(false)

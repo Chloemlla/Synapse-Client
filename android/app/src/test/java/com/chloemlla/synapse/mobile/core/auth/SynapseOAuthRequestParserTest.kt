@@ -24,6 +24,21 @@ class SynapseOAuthRequestParserTest {
     }
 
     @Test
+    fun acceptsPiliplusNativeRedirectForPiliplusClient() {
+        val piliplusUri = validUri
+            .replace("client_id=syn_client_demo", "client_id=piliplus")
+            .replace(
+                "redirect_uri=https%3A%2F%2Fclient.example%2Fcallback",
+                "redirect_uri=piliplus%3A%2F%2Fsynapse-auth",
+            )
+
+        val request = SynapseOAuthRequestParser.parse(piliplusUri, "https://tts.chloemlla.com")
+
+        assertEquals("piliplus", request.clientId)
+        assertEquals("piliplus://synapse-auth", request.redirectUri)
+    }
+
+    @Test
     fun rejectsNonHttpsProviderAndNonCodeResponseTypes() {
         assertThrows(SynapseOAuthRequestException::class.java) {
             SynapseOAuthRequestParser.parse(
