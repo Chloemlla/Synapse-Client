@@ -16,20 +16,14 @@ on:
       - ".github/scripts/**"
       - ".github/workflows/synapse-android.yml"
   workflow_dispatch:
-    inputs:
-      publish_release:
-        description: "Publish a signed GitHub Release from main"
-        required: false
-        default: false
-        type: boolean
 
 permissions:
-  contents: read
+  contents: write
   packages: read
 
 jobs:
-  verify:
-    name: Android Gradle verification
+  build:
+    name: Build signed release APK
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -88,13 +82,36 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.LUMEN_CRASH_READ_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
         run: gradle lintProductionDebug --no-daemon --warning-mode all
 
-      - name: Build release APK for verification
+      - name: Prepare signing key (if available)
+        id: sign-prep
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            keystore_file="$RUNNER_TEMP/synapse-release.jks"
+            if printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore_file" 2>/dev/null; then
+              echo "KEYSTORE_FILE=$keystore_file" >> "$GITHUB_ENV"
+              echo "signing_available=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::KEYSTORE_BASE64 is not valid base64. Building unsigned APK."
+              echo "signing_available=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "::warning::KEYSTORE_BASE64 secret not set. Building unsigned APK."
+            echo "signing_available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release APK
         env:
           SYNAPSE_ANDROID_VERSION_NAME: ${{ env.SYNAPSE_ANDROID_VERSION_NAME }}
           SYNAPSE_ANDROID_VERSION_CODE: ${{ env.SYNAPSE_ANDROID_VERSION_CODE }}
           SYNAPSE_SHORT_HASH: ${{ env.SYNAPSE_SHORT_HASH }}
           SYNAPSE_BUILD_TIME: ${{ env.SYNAPSE_BUILD_TIME }}
           SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
+          KEYSTORE_FILE: ${{ env.KEYSTORE_FILE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.LUMEN_CRASH_READ_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
         run: gradle assembleProductionRelease assembleLegacyRelease --no-daemon --warning-mode all
@@ -111,98 +128,8 @@ jobs:
             android/build/reports/problems/**
           retention-days: 14
 
-  release:
-    name: Android signed release
-    needs: verify
-    if: >-
-      github.event_name != 'pull_request' &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || inputs.publish_release == true)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: read
-    defaults:
-      run:
-        working-directory: android
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
-
-      - name: Set up Java 21
-        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520
-        with:
-          distribution: zulu
-          java-version: "21"
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d
-        with:
-          gradle-version: "9.5.1"
-          cache-read-only: false
-          cache-cleanup: on-success
-
-      - name: Read app version
-        run: |
-          VERSION_NAME="1.0.${GITHUB_RUN_NUMBER}"
-          SHORT_HASH="${GITHUB_SHA::8}"
-          BUILD_TIME="$(date -u +%Y-%m-%dT%H:%MZ)"
-          echo "SYNAPSE_ANDROID_VERSION_NAME=${VERSION_NAME}" >> "$GITHUB_ENV"
-          echo "SYNAPSE_ANDROID_VERSION_CODE=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
-          echo "SYNAPSE_SHORT_HASH=${SHORT_HASH}" >> "$GITHUB_ENV"
-          echo "SYNAPSE_BUILD_TIME=${BUILD_TIME}" >> "$GITHUB_ENV"
-          echo "SYNAPSE_ANDROID_RELEASE_VERSION=${VERSION_NAME}-${SHORT_HASH}" >> "$GITHUB_ENV"
-
-      - name: Validate release secrets
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
-        run: |
-          missing_secrets=()
-          for secret_name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD SYNAPSE_API_BASE_URL; do
-            if [ -z "${!secret_name}" ]; then
-              missing_secrets+=("$secret_name")
-            fi
-          done
-
-          if [ "${#missing_secrets[@]}" -gt 0 ]; then
-            for secret_name in "${missing_secrets[@]}"; do
-              echo "::error::$secret_name repository secret is required for signed Android releases."
-            done
-            exit 1
-          fi
-
-      - name: Prepare release signing
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        run: |
-          keystore_file="$RUNNER_TEMP/synapse-release.jks"
-          if ! printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore_file"; then
-            echo "::error::KEYSTORE_BASE64 is not valid base64."
-            exit 1
-          fi
-
-          echo "KEYSTORE_FILE=$keystore_file" >> "$GITHUB_ENV"
-
-      - name: Build signed release APK
-        env:
-          SYNAPSE_ANDROID_VERSION_NAME: ${{ env.SYNAPSE_ANDROID_VERSION_NAME }}
-          SYNAPSE_ANDROID_VERSION_CODE: ${{ env.SYNAPSE_ANDROID_VERSION_CODE }}
-          SYNAPSE_SHORT_HASH: ${{ env.SYNAPSE_SHORT_HASH }}
-          SYNAPSE_BUILD_TIME: ${{ env.SYNAPSE_BUILD_TIME }}
-          SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
-          KEYSTORE_FILE: ${{ env.KEYSTORE_FILE }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.LUMEN_CRASH_READ_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
-        run: gradle assembleProductionRelease assembleLegacyRelease --no-daemon --warning-mode all
-
       - name: Prepare release assets
+        if: steps.sign-prep.outputs.signing_available == 'true'
         run: |
           mkdir -p "$GITHUB_WORKSPACE/release-assets"
           VERSION="${SYNAPSE_ANDROID_RELEASE_VERSION}"
@@ -285,7 +212,8 @@ jobs:
           )
           PY
 
-      - name: Upload release assets
+      - name: Upload signed APK artifacts
+        if: steps.sign-prep.outputs.signing_available == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: synapse-android-release-assets
@@ -293,7 +221,11 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Automatic release
+      - name: Automatic release (main branch only)
+        if: >-
+          steps.sign-prep.outputs.signing_available == 'true' &&
+          github.event_name != 'pull_request' &&
+          github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
