@@ -226,6 +226,17 @@ data class IpLocationResult(
         ).joinToString(" · ").takeIf { it.isNotBlank() }
 }
 
+/**
+ * Result from the IP location query endpoint (`/api/ip-location?ip=...`).
+ * Returns a pre-formatted location string for a specified IP address.
+ */
+data class IpLocationQueryResult(
+    val ip: String,
+    val location: String?,
+) {
+    val locationLabel: String? = location?.takeIf { it.isNotBlank() }
+}
+
 data class GoogleAuthLoginResult(
     val token: String,
     val user: SynapseUser,

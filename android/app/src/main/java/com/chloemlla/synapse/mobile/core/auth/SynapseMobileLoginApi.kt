@@ -103,6 +103,16 @@ class SynapseMobileLoginApi(
             path = "/api/ip",
         ) { it.toIpLocationResult() }
 
+    /**
+     * Queries location for a specific IP address. Used as a fallback when the
+     * device sessions endpoint does not return a valid IP location for a
+     * non-current device. Does not require authentication.
+     */
+    suspend fun getIpLocationForIp(ip: String): IpLocationQueryResult =
+        get(
+            path = "/api/ip-location?ip=${Uri.encode(ip)}",
+        ) { it.toIpLocationQueryResult() }
+
     suspend fun getGoogleAuthConfig(): GoogleAuthConfig =
         get(
             path = "/api/auth/google/config?client=synapse-android",

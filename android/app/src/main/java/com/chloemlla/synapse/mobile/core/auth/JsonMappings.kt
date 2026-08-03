@@ -232,6 +232,12 @@ internal fun JSONObject.toIpLocationResult(): IpLocationResult =
         city = firstString("city"),
     )
 
+internal fun JSONObject.toIpLocationQueryResult(): IpLocationQueryResult =
+    IpLocationQueryResult(
+        ip = firstString("ip").orEmpty(),
+        location = firstString("location"),
+    )
+
 internal fun JSONObject.toSynapseUser(): SynapseUser =
     SynapseUser(
         id = optString("id"),

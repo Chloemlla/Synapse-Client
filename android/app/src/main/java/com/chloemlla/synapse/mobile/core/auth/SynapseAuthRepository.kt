@@ -86,32 +86,48 @@ class SynapseAuthRepository(
     }
 
     /**
-     * If the current device's IP location is absent, try the standalone
-     * `/api/ip` endpoint as a fallback. This covers cases where the server's
-     * session-level geolocation service fails but the basic IP geo endpoint
-     * works.
+     * If any device's IP location is absent, try to look it up via the
+     * standalone IP geolocation endpoints. For the current device, use
+     * `/api/ip` (returns the caller's IP location). For other devices,
+     * use `/api/ip-location?ip=...` (looks up a specific IP). This covers
+     * cases where the server's session-level geolocation service fails
+     * but the basic IP geo endpoints work.
      */
     private suspend fun SynapseDeviceSessions.withIpLocationFallback(
         api: SynapseMobileLoginApi,
     ): SynapseDeviceSessions {
+        val missing = sessions.filter { it.ipLocation == null && !it.ipAddress.isNullOrBlank() }
+        if (missing.isEmpty()) return this
+
         val currentKey = currentDeviceKey
-        val currentSession = sessions.firstOrNull { it.deviceKey == currentKey }
-        if (currentKey == null || currentSession == null || currentSession.ipLocation != null) {
-            return this
+        val updates = mutableMapOf<String, String>()
+
+        for (session in missing) {
+            if (session.deviceKey == currentKey) {
+                // Current device: use /api/ip (no IP parameter needed)
+                try {
+                    val ipLocation = api.getIpLocation()
+                    val label = ipLocation.locationLabel
+                    if (!label.isNullOrBlank()) updates[session.deviceKey ?: session.sessionId] = label
+                } catch (_: Exception) { /* skip */ }
+            } else {
+                // Other devices: use /api/ip-location?ip=...
+                try {
+                    val result = api.getIpLocationForIp(session.ipAddress!!)
+                    val label = result.locationLabel
+                    if (!label.isNullOrBlank()) updates[session.deviceKey ?: session.sessionId] = label
+                } catch (_: Exception) { /* skip */ }
+            }
         }
-        return try {
-            val ipLocation = api.getIpLocation()
-            val label = ipLocation.locationLabel
-            if (label.isNullOrBlank()) return this
-            copy(
-                sessions = sessions.map { session ->
-                    if (session.deviceKey == currentKey) session.copy(ipLocation = label)
-                    else session
-                },
-            )
-        } catch (_: Exception) {
-            this
-        }
+
+        if (updates.isEmpty()) return this
+        return copy(
+            sessions = sessions.map { session ->
+                val key = session.deviceKey ?: session.sessionId
+                val label = updates[key]
+                if (label != null) session.copy(ipLocation = label) else session
+            },
+        )
     }
 
     suspend fun revokeSession(target: SynapseSessionRevokeTarget): Boolean {
