@@ -162,6 +162,11 @@ data class SynapseQrPayload(
 
 
 
+data class AuthProvidersPublicConfig(
+    val google: GoogleAuthConfig,
+    val linuxdo: LinuxDoAuthConfig,
+)
+
 data class LinuxDoAuthConfig(
     val enabled: Boolean,
     val clientIdConfigured: Boolean,

@@ -116,6 +116,15 @@ internal fun JSONObject.toPasskeyAuthenticationFinishResult(): PasskeyAuthentica
 
 
 
+internal fun JSONObject.toAuthProvidersPublicConfig(): AuthProvidersPublicConfig {
+    val googleJson = optJSONObject("google") ?: JSONObject()
+    val linuxdoJson = optJSONObject("linuxdo") ?: JSONObject()
+    return AuthProvidersPublicConfig(
+        google = googleJson.toGoogleAuthConfig(),
+        linuxdo = linuxdoJson.toLinuxDoAuthConfig(),
+    )
+}
+
 internal fun JSONObject.toLinuxDoAuthConfig(): LinuxDoAuthConfig {
     val data = optJSONObject("data")
     val clientIdConfigured = optBoolean(

@@ -54,8 +54,7 @@ class SynapseLoginViewModel(
             }
         }
         loadTurnstileConfig()
-        loadGoogleAuthConfig()
-        loadLinuxDoAuthConfig()
+        loadAuthProvidersPublicConfig()
     }
 
     fun selectTab(tab: SynapseTab) {
@@ -598,6 +597,37 @@ class SynapseLoginViewModel(
     }
 
 
+
+    fun loadAuthProvidersPublicConfig() {
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(
+                    googleAuthConfigLoading = true,
+                    googleAuthConfigError = null,
+                    linuxDoAuthConfigLoading = true,
+                    linuxDoAuthConfigError = null,
+                )
+            }
+            runCatching { repository.getAuthProvidersPublicConfig() }
+                .onSuccess { config ->
+                    mutableState.update {
+                        it.copy(
+                            googleAuthConfig = config.google,
+                            googleAuthConfigLoading = false,
+                            googleAuthConfigError = null,
+                            linuxDoAuthConfig = config.linuxdo,
+                            linuxDoAuthConfigLoading = false,
+                            linuxDoAuthConfigError = null,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    // Combined endpoint failed — fall back to individual calls
+                    loadGoogleAuthConfig()
+                    loadLinuxDoAuthConfig()
+                }
+        }
+    }
 
     fun loadLinuxDoAuthConfig() {
         viewModelScope.launch {

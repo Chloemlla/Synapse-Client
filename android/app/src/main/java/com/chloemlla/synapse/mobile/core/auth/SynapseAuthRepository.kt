@@ -51,6 +51,9 @@ class SynapseAuthRepository(
     suspend fun getTurnstilePublicConfig(): TurnstilePublicConfig =
         apiFor(trustedApiOrigin).getTurnstilePublicConfig()
 
+    suspend fun getAuthProvidersPublicConfig(): AuthProvidersPublicConfig =
+        apiFor(trustedApiOrigin).getAuthProvidersPublicConfig()
+
     suspend fun getGoogleAuthConfig(): GoogleAuthConfig =
         apiFor(trustedApiOrigin).getGoogleAuthConfig()
 

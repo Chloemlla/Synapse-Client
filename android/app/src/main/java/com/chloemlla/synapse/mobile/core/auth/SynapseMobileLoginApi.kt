@@ -129,6 +129,11 @@ class SynapseMobileLoginApi(
             path = "/api/turnstile/public-config",
         ) { it.toTurnstilePublicConfig() }
 
+    suspend fun getAuthProvidersPublicConfig(): AuthProvidersPublicConfig =
+        get(
+            path = "/api/auth/providers/public-config",
+        ) { it.toAuthProvidersPublicConfig() }
+
     suspend fun createChallenge(): MobileLoginChallenge =
         post(
             path = "/api/auth/mobile-login/challenge",
