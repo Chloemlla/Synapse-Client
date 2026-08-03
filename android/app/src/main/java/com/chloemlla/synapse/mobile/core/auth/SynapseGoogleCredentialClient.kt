@@ -9,12 +9,16 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.tasks.Tasks
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 
 /**
  * Android Credential Manager adapter for Sign in with Google (SIWG).
@@ -31,7 +35,8 @@ class SynapseGoogleCredentialClient(
     /**
      * Tries authorized Google accounts first (bottom sheet), then widens to all
      * device Google accounts, then falls back to the full Sign in with Google
-     * button flow. Account reauth failures (code 16) are treated as recoverable
+     * button flow, and finally attempts a browser-based GoogleSignInClient
+     * fallback. Account reauth failures (code 16) are treated as recoverable
      * for earlier steps so a stale authorized account does not hard-fail SIWG.
      */
     suspend fun getGoogleIdToken(
@@ -66,6 +71,15 @@ class SynapseGoogleCredentialClient(
             }
             add {
                 requestSignInWithGoogleButton(
+                    activity = activity,
+                    serverClientId = cleanClientId,
+                )
+            }
+            // Browser-based fallback: GoogleSignInClient bypasses Credential
+            // Manager entirely, so it is not affected by account reauth failures
+            // (code 16) that block all Credential Manager paths.
+            add {
+                requestGoogleSignInClientFallback(
                     activity = activity,
                     serverClientId = cleanClientId,
                 )
@@ -155,6 +169,49 @@ class SynapseGoogleCredentialClient(
                 request = request,
             ).credential,
         )
+    }
+
+    /**
+     * Browser-based fallback using GoogleSignInClient. Uses silentSignIn() to
+     * attempt a non-interactive token refresh. GoogleSignInClient bypasses the
+     * Credential Manager entirely, so it is not affected by account reauth
+     * failures (code 16) that block all Credential Manager paths.
+     *
+     * If silentSignIn() fails (e.g. the account needs interactive re-auth),
+     * the error message guides the user to re-add their Google account in
+     * system settings, which is the only reliable client-side fix.
+     */
+    private suspend fun requestGoogleSignInClientFallback(
+        activity: Activity,
+        serverClientId: String,
+    ): String = withContext(Dispatchers.IO) {
+        val gso = GoogleSignInOptions.Builder()
+            .requestIdToken(serverClientId)
+            .requestEmail()
+            .build()
+        val googleSignInClient = GoogleSignIn.getClient(activity, gso)
+
+        val account = try {
+            Tasks.await(googleSignInClient.silentSignIn(), 30, TimeUnit.SECONDS)
+        } catch (e: java.util.concurrent.TimeoutException) {
+            throw IllegalStateException(
+                "Google 登录超时。请检查网络连接后重试。",
+                e,
+            )
+        } catch (e: Exception) {
+            // Interactive sign-in via getSignInIntent() would require the
+            // ActivityResultLauncher pattern, which is not available in this
+            // context. Instead, guide the user to the system-level fix.
+            throw IllegalStateException(
+                "Google 登录需要重新验证账号。请前往系统设置 → Google → 管理账号，\n" +
+                    "移除并重新添加此 Google 账号，然后重新尝试登录。\n" +
+                    "（异常：${e.message?.take(120) ?: e::class.java.simpleName}）",
+                e,
+            )
+        }
+        val idToken = account.idToken?.trim()
+        require(!idToken.isNullOrBlank()) { "Google Sign-In 未返回有效 idToken。" }
+        idToken
     }
 
     private fun extractIdToken(credential: Credential): String {

@@ -25,7 +25,9 @@ internal object SynapseCredentialErrorMapper {
         val message = systemMessage?.trim().orEmpty()
         return when {
             isAccountReauthFailure(message) ->
-                "$actionLabel 需要重新验证 Google 账号登录状态。请打开系统设置重新登录该账号，或更换账号后重试。"
+                "$actionLabel 需要重新验证 Google 账号登录状态。\n" +
+                    "请先尝试前往系统设置 → Google → 管理账号，移除并重新添加此 Google 账号，\n" +
+                    "然后返回本应用重试。如果仍然失败，请尝试使用账号密码登录。"
             isUserCancellation(message) ->
                 "已取消 $actionLabel。"
             message.isNotBlank() ->
