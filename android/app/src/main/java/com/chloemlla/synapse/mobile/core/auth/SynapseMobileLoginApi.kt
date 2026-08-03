@@ -1,5 +1,6 @@
 package com.chloemlla.synapse.mobile.core.auth
 
+import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -11,6 +12,7 @@ import org.json.JSONObject
 class SynapseMobileLoginApi(
     private val baseUrl: String,
     private val httpClient: OkHttpClient,
+    private val clientMetadata: () -> Map<String, String> = { emptyMap() },
 ) {
     suspend fun standardLogin(identifier: String, password: String, cfToken: String? = null): StandardLoginResult =
         post(
@@ -31,6 +33,59 @@ class SynapseMobileLoginApi(
         get(
             path = "/api/auth/linuxdo/config",
         ) { it.toLinuxDoAuthConfig() }
+
+    suspend fun getOAuthAuthorizePreview(
+        request: SynapseOAuthAuthorizationRequest,
+        jwt: String,
+    ): SynapseOAuthAuthorizePreview =
+        get(
+            path = "/api/oauth/authorize/preview?${request.queryParameters().toEncodedQuery()}",
+            bearerToken = jwt,
+        ) { it.toSynapseOAuthAuthorizePreview() }
+
+    suspend fun submitOAuthAuthorization(
+        request: SynapseOAuthAuthorizationRequest,
+        approve: Boolean,
+        jwt: String,
+    ): SynapseOAuthAuthorizationResult =
+        post(
+            path = "/api/oauth/authorize",
+            bearerToken = jwt,
+            body = request.queryParameters()
+                .toMutableMap()
+                .apply { put("approve", approve.toString()) }
+                .toJsonObject(),
+        ) { it.toSynapseOAuthAuthorizationResult() }
+
+    suspend fun listDeviceSessions(jwt: String): SynapseDeviceSessions =
+        get(
+            path = "/api/auth/sessions",
+            bearerToken = jwt,
+        ) { it.toSynapseDeviceSessions() }
+
+    suspend fun revokeDeviceSession(
+        jwt: String,
+        deviceKey: String,
+    ): Boolean = revokeSessionTarget(
+        jwt = jwt,
+        id = deviceKey,
+    )
+
+    suspend fun revokeClientSessions(
+        jwt: String,
+        deviceKey: String,
+    ): Boolean = revokeSessionTarget(
+        jwt = jwt,
+        id = deviceKey,
+    )
+
+    suspend fun revokeDeviceSessions(
+        jwt: String,
+        deviceKey: String,
+    ): Boolean = revokeSessionTarget(
+        jwt = jwt,
+        id = deviceKey,
+    )
 
     suspend fun exchangeLinuxDoTicket(ticket: String): LinuxDoLoginResult =
         post(
@@ -214,6 +269,20 @@ class SynapseMobileLoginApi(
             body = JSONObject().put("clientLoginToken", clientLoginToken),
         ) { it.optBoolean("revoked") }
 
+    private suspend fun revokeSessionTarget(
+        jwt: String,
+        id: String,
+    ): Boolean =
+        post(
+            path = "/api/auth/sessions/${Uri.encode(id)}/revoke",
+            bearerToken = jwt,
+            body = JSONObject(),
+        ) {
+            it.optBoolean("success") ||
+                it.optBoolean("revoked") ||
+                (it.has("revoked") && it.optInt("revoked", -1) >= 0)
+        }
+
     private suspend fun <T> post(
         path: String,
         body: JSONObject,
@@ -228,6 +297,9 @@ class SynapseMobileLoginApi(
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
             .header("User-Agent", USER_AGENT)
+            .apply {
+                clientMetadata().forEach { (name, value) -> header(name, value) }
+            }
             .apply {
                 bearerToken
                     ?.takeIf { it.isNotBlank() }
@@ -264,6 +336,9 @@ class SynapseMobileLoginApi(
             .header("Accept", "application/json")
             .header("User-Agent", USER_AGENT)
             .apply {
+                clientMetadata().forEach { (name, value) -> header(name, value) }
+            }
+            .apply {
                 bearerToken
                     ?.takeIf { it.isNotBlank() }
                     ?.let { header("Authorization", "Bearer $it") }
@@ -290,6 +365,14 @@ class SynapseMobileLoginApi(
 
     private fun resolveUrl(path: String): String =
         "${baseUrl.trim().trimEnd('/')}/${path.trimStart('/')}"
+
+    private fun Map<String, String>.toEncodedQuery(): String =
+        entries.joinToString("&") { (key, value) ->
+            "${Uri.encode(key)}=${Uri.encode(value)}"
+        }
+
+    private fun Map<String, String>.toJsonObject(): JSONObject =
+        JSONObject().apply { forEach { (key, value) -> put(key, value) } }
 
     private fun String.toJsonObject(): JSONObject {
         if (isBlank()) return JSONObject()

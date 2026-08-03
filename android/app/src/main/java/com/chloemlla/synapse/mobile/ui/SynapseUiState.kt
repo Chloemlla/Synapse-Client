@@ -2,6 +2,9 @@ package com.chloemlla.synapse.mobile.ui
 
 import com.chloemlla.synapse.mobile.core.auth.PasskeyAuthenticationOptions
 import com.chloemlla.synapse.mobile.core.auth.PendingTwoFactorChallenge
+import com.chloemlla.synapse.mobile.core.auth.SynapseDeviceSessions
+import com.chloemlla.synapse.mobile.core.auth.SynapseOAuthAuthorizationRequest
+import com.chloemlla.synapse.mobile.core.auth.SynapseOAuthAuthorizePreview
 import com.chloemlla.synapse.mobile.core.auth.StoredSynapseCredentials
 import com.chloemlla.synapse.mobile.core.auth.SynapseQrPayload
 import com.chloemlla.synapse.mobile.core.auth.GoogleAuthConfig
@@ -37,6 +40,18 @@ data class SynapseUiState(
     val linuxDoAuthConfigLoading: Boolean = true,
     val linuxDoAuthConfigError: String? = null,
     val linuxDoBrowserOpened: Boolean = false,
+    val pendingOAuthRequest: SynapseOAuthAuthorizationRequest? = null,
+    val oauthPreview: SynapseOAuthAuthorizePreview? = null,
+    val oauthLoading: Boolean = false,
+    val oauthActionLoading: Boolean = false,
+    val oauthCallbackUri: String? = null,
+    val deviceSessions: SynapseDeviceSessions = SynapseDeviceSessions(
+        currentDeviceId = "",
+        sessions = emptyList(),
+    ),
+    val deviceSessionsLoading: Boolean = false,
+    val deviceSessionsError: String? = null,
+    val deviceSessionActionKey: String? = null,
     val turnstileConfig: TurnstilePublicConfig = TurnstilePublicConfig(enabled = false, siteKey = null),
     val turnstileConfigLoading: Boolean = true,
     val turnstileConfigError: String? = null,

@@ -52,6 +52,17 @@
                     android:scheme="synapse" />
             </intent-filter>
 
+            <!-- Happy-TTS OAuth authorization requests. The request is validated in-app. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="oauth"
+                    android:path="/authorize"
+                    android:scheme="synapse" />
+            </intent-filter>
+
             <!--
               Android App Links for Happy-TTS Linux.do OAuth completion.
               Requires Digital Asset Links at:

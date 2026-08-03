@@ -16,6 +16,7 @@ import com.chloemlla.synapse.mobile.core.auth.SynapseGoogleCredentialClient
 import com.chloemlla.synapse.mobile.core.auth.SynapseLinuxDoCallbackParser
 import com.chloemlla.synapse.mobile.core.auth.LinuxDoAuthConfig
 import com.chloemlla.synapse.mobile.core.auth.SynapseQrPayload
+import com.chloemlla.synapse.mobile.core.auth.SynapseSessionRevokeTarget
 import com.chloemlla.synapse.mobile.core.notify.SynapseLiveUpdateCopy
 import com.chloemlla.synapse.mobile.core.notify.SynapseLiveUpdateKind
 import com.chloemlla.synapse.mobile.core.notify.SynapseLiveUpdateNotifier
@@ -662,11 +663,242 @@ class SynapseLoginViewModel(
     fun handleIncomingUri(raw: String) {
         val trimmed = raw.trim()
         if (trimmed.isBlank()) return
+        if (repository.isOAuthAuthorizationUri(trimmed)) {
+            handleOAuthAuthorization(trimmed)
+            return
+        }
         if (SynapseLinuxDoCallbackParser.isLinuxDoRelated(trimmed)) {
             completeLinuxDoFromCallback(trimmed)
             return
         }
         acceptScannedPayload(trimmed)
+    }
+
+    private fun handleOAuthAuthorization(raw: String) {
+        val request = try {
+            repository.parseOAuthAuthorizationRequest(raw)
+        } catch (error: Exception) {
+            val message = SynapseFailureMessage.from(
+                error = error,
+                fallback = "OAuth 授权请求无效。",
+                context = "OAuth request parse",
+            )
+            val callback = repository.oauthErrorRedirectUri(
+                raw = raw,
+                error = "invalid_request",
+                description = "OAuth 请求无效。",
+            )
+            mutableState.update {
+                it.copy(
+                    pendingOAuthRequest = null,
+                    oauthPreview = null,
+                    oauthLoading = false,
+                    oauthActionLoading = false,
+                    oauthCallbackUri = callback,
+                    selectedTab = SynapseTab.Session,
+                    error = if (callback == null) message else null,
+                    status = if (callback == null) "OAuth 请求未发送。" else "OAuth 请求无效，正在返回请求方。",
+                )
+            }
+            return
+        }
+
+        mutableState.update {
+            it.copy(
+                pendingOAuthRequest = request,
+                oauthPreview = null,
+                oauthLoading = true,
+                oauthActionLoading = false,
+                oauthCallbackUri = null,
+                selectedTab = SynapseTab.Session,
+                error = null,
+                status = "正在读取 OAuth 授权请求…",
+            )
+        }
+        viewModelScope.launch {
+            runCatching {
+                repository.previewOAuthAuthorization(request).also { preview ->
+                    require(
+                        preview.client.clientId == request.clientId &&
+                            preview.redirectUri == request.redirectUri &&
+                            preview.responseType == "code" &&
+                            preview.state == request.state &&
+                            preview.codeChallengeMethod == "S256",
+                    ) {
+                        "OAuth 预览响应与请求不匹配。"
+                    }
+                }
+            }
+                .onSuccess { preview ->
+                    mutableState.update {
+                        it.copy(
+                            pendingOAuthRequest = request,
+                            oauthPreview = preview,
+                            oauthLoading = false,
+                            error = null,
+                            status = "请确认要授予该客户端的权限。",
+                        )
+                    }
+                }
+                .onFailure {
+                    mutableState.update {
+                        it.copy(
+                            pendingOAuthRequest = null,
+                            oauthPreview = null,
+                            oauthLoading = false,
+                            oauthCallbackUri = request.errorRedirectUri("server_error", "OAuth 授权预览失败。"),
+                            error = null,
+                            status = "OAuth 授权无法继续，正在返回请求方。",
+                        )
+                    }
+                }
+        }
+    }
+
+    fun approveOAuthAuthorization() = submitOAuthAuthorization(approve = true)
+
+    fun denyOAuthAuthorization() = submitOAuthAuthorization(approve = false)
+
+    private fun submitOAuthAuthorization(approve: Boolean) {
+        val current = state.value
+        val request = current.pendingOAuthRequest
+        if (request == null || current.oauthPreview == null || current.oauthActionLoading) return
+
+        mutableState.update {
+            it.copy(
+                oauthActionLoading = true,
+                error = null,
+                status = if (approve) "正在确认 OAuth 授权…" else "正在拒绝 OAuth 授权…",
+            )
+        }
+        viewModelScope.launch {
+            runCatching {
+                val result = repository.submitOAuthAuthorization(request, approve)
+                repository.validateOAuthCallbackUri(result.redirectUri, request, approved = approve)
+            }
+                .onSuccess { callbackUri ->
+                    mutableState.update {
+                        it.copy(
+                            pendingOAuthRequest = null,
+                            oauthPreview = null,
+                            oauthLoading = false,
+                            oauthActionLoading = false,
+                            oauthCallbackUri = callbackUri,
+                            error = null,
+                            status = if (approve) "OAuth 授权已确认，正在返回请求方。" else "OAuth 授权已拒绝，正在返回请求方。",
+                        )
+                    }
+                }
+                .onFailure {
+                    mutableState.update {
+                        it.copy(
+                            pendingOAuthRequest = null,
+                            oauthPreview = null,
+                            oauthLoading = false,
+                            oauthActionLoading = false,
+                            oauthCallbackUri = request.errorRedirectUri("server_error", "OAuth 授权处理失败。"),
+                            error = null,
+                            status = "OAuth 授权处理失败，正在返回请求方。",
+                        )
+                    }
+                }
+        }
+    }
+
+    fun consumeOAuthCallback() {
+        mutableState.update { it.copy(oauthCallbackUri = null) }
+    }
+
+    fun reportOAuthCallbackOpenFailed(message: String) {
+        mutableState.update {
+            it.copy(
+                oauthCallbackUri = null,
+                error = message.ifBlank { "无法打开 OAuth 回调地址。" },
+                status = "",
+            )
+        }
+    }
+
+    fun loadDeviceSessions() {
+        if (!state.value.hasStoredAccount || state.value.deviceSessionsLoading) return
+        mutableState.update {
+            it.copy(
+                deviceSessionsLoading = true,
+                deviceSessionsError = null,
+            )
+        }
+        viewModelScope.launch {
+            runCatching { repository.listDeviceSessions() }
+                .onSuccess { sessions ->
+                    mutableState.update {
+                        it.copy(
+                            credentials = repository.credentials(),
+                            deviceSessions = sessions,
+                            deviceSessionsLoading = false,
+                            deviceSessionsError = null,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(
+                            deviceSessionsLoading = false,
+                            deviceSessionsError = SynapseFailureMessage.from(
+                                error,
+                                fallback = "获取活动设备和客户端失败。",
+                                context = "device sessions",
+                            ),
+                        )
+                    }
+                }
+        }
+    }
+
+    fun revokeDeviceSession(target: SynapseSessionRevokeTarget) {
+        val current = state.value
+        if (current.deviceSessionActionKey != null) return
+        if (target.kind == com.chloemlla.synapse.mobile.core.auth.SynapseSessionRevokeKind.DEVICE &&
+            target.id == current.deviceSessions.currentDeviceKey
+        ) {
+            mutableState.update { it.copy(deviceSessionsError = "当前设备不可从列表撤销。") }
+            return
+        }
+        mutableState.update {
+            it.copy(
+                deviceSessionActionKey = target.requestKey,
+                deviceSessionsError = null,
+            )
+        }
+        viewModelScope.launch {
+            runCatching {
+                val revoked = repository.revokeSession(target)
+                require(revoked) { "服务端未确认会话已撤销。" }
+                repository.listDeviceSessions()
+            }
+                .onSuccess { sessions ->
+                    mutableState.update {
+                        it.copy(
+                            credentials = repository.credentials(),
+                            deviceSessions = sessions,
+                            deviceSessionActionKey = null,
+                            status = "已撤销${target.label}。",
+                            error = null,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(
+                            deviceSessionActionKey = null,
+                            deviceSessionsError = SynapseFailureMessage.from(
+                                error,
+                                fallback = "撤销${target.label}失败。",
+                                context = "revoke device session",
+                            ),
+                        )
+                    }
+                }
+        }
     }
 
     fun completeLinuxDoFromCallback(raw: String) {

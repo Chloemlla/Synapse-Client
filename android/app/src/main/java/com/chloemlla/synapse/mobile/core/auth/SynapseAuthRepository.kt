@@ -33,6 +33,21 @@ class SynapseAuthRepository(
 
     fun apiOrigin(): String = trustedApiOrigin
 
+    fun parseOAuthAuthorizationRequest(raw: String): SynapseOAuthAuthorizationRequest =
+        SynapseOAuthRequestParser.parse(raw, trustedApiOrigin)
+
+    fun isOAuthAuthorizationUri(raw: String): Boolean =
+        SynapseOAuthRequestParser.isOAuthRelated(raw)
+
+    fun oauthErrorRedirectUri(raw: String, error: String, description: String): String? =
+        SynapseOAuthRequestParser.safeErrorRedirectUri(raw, error, description)
+
+    fun validateOAuthCallbackUri(
+        callbackUri: String,
+        request: SynapseOAuthAuthorizationRequest,
+        approved: Boolean,
+    ): String = SynapseOAuthRequestParser.validateCallbackUri(callbackUri, request, approved)
+
     suspend fun getTurnstilePublicConfig(): TurnstilePublicConfig =
         apiFor(trustedApiOrigin).getTurnstilePublicConfig()
 
@@ -41,6 +56,39 @@ class SynapseAuthRepository(
 
     suspend fun getLinuxDoAuthConfig(): LinuxDoAuthConfig =
         apiFor(trustedApiOrigin).getLinuxDoAuthConfig()
+
+    suspend fun previewOAuthAuthorization(
+        request: SynapseOAuthAuthorizationRequest,
+    ): SynapseOAuthAuthorizePreview {
+        requireTrustedOAuthOrigin(request)
+        return apiFor(request.providerOrigin).getOAuthAuthorizePreview(request, authenticatedJwt())
+    }
+
+    suspend fun submitOAuthAuthorization(
+        request: SynapseOAuthAuthorizationRequest,
+        approve: Boolean,
+    ): SynapseOAuthAuthorizationResult {
+        requireTrustedOAuthOrigin(request)
+        return apiFor(request.providerOrigin).submitOAuthAuthorization(
+            request = request,
+            approve = approve,
+            jwt = authenticatedJwt(),
+        )
+    }
+
+    suspend fun listDeviceSessions(): SynapseDeviceSessions =
+        apiFor(trustedApiOrigin).listDeviceSessions(authenticatedJwt())
+
+    suspend fun revokeSession(target: SynapseSessionRevokeTarget): Boolean {
+        require(target.id.isNotBlank()) { "缺少要撤销的会话标识。" }
+        val jwt = authenticatedJwt()
+        val api = apiFor(trustedApiOrigin)
+        return when (target.kind) {
+            SynapseSessionRevokeKind.SESSION -> api.revokeDeviceSession(jwt, target.id)
+            SynapseSessionRevokeKind.CLIENT -> api.revokeClientSessions(jwt, target.id)
+            SynapseSessionRevokeKind.DEVICE -> api.revokeDeviceSessions(jwt, target.id)
+        }
+    }
 
     /**
      * Happy-TTS Linux.do OAuth start URL (server issues PKCE + redirects to connect.linux.do).
@@ -353,7 +401,28 @@ class SynapseAuthRepository(
             httpClient = SynapseSecureOkHttpFactory.create(
                 baseUrl = SynapseApiOriginPolicy.normalizeHttpsOrigin(baseUrl),
             ),
+            clientMetadata = {
+                mapOf(
+                    "X-Client-Name" to "Synapse-Client",
+                    "X-Platform" to "Android",
+                    "X-Device-Id" to deviceId.getOrCreate(),
+                    "X-Device-Name" to defaultDeviceName(),
+                )
+            },
         )
+
+    private suspend fun authenticatedJwt(): String {
+        require(!credentialStore.revokeExpiredClientTokens()) {
+            "SML 登录令牌已过期，请重新完成授权登录。"
+        }
+        val storedJwt = credentialStore.load().jwt
+        if (!storedJwt.isNullOrBlank()) return storedJwt
+        return silentLogin().token
+    }
+
+    private fun requireTrustedOAuthOrigin(request: SynapseOAuthAuthorizationRequest) {
+        SynapseApiOriginPolicy.requireTrustedOrigin(request.providerOrigin, trustedApiOrigin)
+    }
 
     private fun parseTrustedQrPayload(rawPayload: String): SynapseQrPayload {
         val payload = SynapseQrPayload.parse(rawPayload)

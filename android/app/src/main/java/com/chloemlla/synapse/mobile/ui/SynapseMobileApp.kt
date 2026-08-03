@@ -48,6 +48,7 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.QrCodeScanner
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.VerifiedUser
@@ -77,6 +78,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -104,6 +106,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chloemlla.synapse.mobile.BuildConfig
 import com.chloemlla.synapse.mobile.core.auth.StoredSynapseAccount
+import com.chloemlla.synapse.mobile.core.auth.SynapseDeviceSession
+import com.chloemlla.synapse.mobile.core.auth.SynapseSessionRevokeKind
+import com.chloemlla.synapse.mobile.core.auth.SynapseSessionRevokeTarget
 import com.chloemlla.synapse.mobile.core.auth.SynapseTokenExpiry
 import com.chloemlla.synapse.mobile.ui.svg.DynamicColorImageVectors
 import com.chloemlla.synapse.mobile.ui.svg.drawablevectors.coder
@@ -120,6 +125,26 @@ private val SynapseButtonContentPadding = PaddingValues(horizontal = 20.dp, vert
 fun SynapseMobileApp(viewModel: SynapseLoginViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val chromeSurface = MaterialTheme.colorScheme.surface
+    val context = LocalContext.current
+
+    LaunchedEffect(state.oauthCallbackUri) {
+        val callbackUri = state.oauthCallbackUri ?: return@LaunchedEffect
+        runCatching {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(callbackUri)),
+            )
+        }.onSuccess {
+            viewModel.consumeOAuthCallback()
+        }.onFailure { error ->
+            viewModel.reportOAuthCallbackOpenFailed(
+                SynapseFailureMessage.from(
+                    error = error,
+                    fallback = "无法打开 OAuth 回调地址。",
+                    context = "OAuth callback",
+                ),
+            )
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -204,6 +229,15 @@ fun SynapseMobileApp(viewModel: SynapseLoginViewModel) {
                 }
             }
         }
+    }
+
+    state.oauthPreview?.let { preview ->
+        OAuthAuthorizationDialog(
+            state = state,
+            preview = preview,
+            onApprove = viewModel::approveOAuthAuthorization,
+            onDeny = viewModel::denyOAuthAuthorization,
+        )
     }
 }
 
@@ -1246,12 +1280,97 @@ private fun WebLoginAccountChoice(
 }
 
 @Composable
+private fun OAuthAuthorizationDialog(
+    state: SynapseUiState,
+    preview: com.chloemlla.synapse.mobile.core.auth.SynapseOAuthAuthorizePreview,
+    onApprove: () -> Unit,
+    onDeny: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = { },
+        icon = {
+            Icon(
+                imageVector = Icons.Outlined.VerifiedUser,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        },
+        title = { Text("OAuth 授权确认") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(LocalPanelSpacing.current.itemSpacing)) {
+                Text(
+                    text = "${preview.client.name} 请求访问当前 Synapse 账号。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                CopyableLine("授权账号", preview.account.username.ifBlank { preview.account.email })
+                if (preview.account.email.isNotBlank() && preview.account.email != preview.account.username) {
+                    CopyableLine("账号邮箱", preview.account.email)
+                }
+                CopyableLine("回调地址", preview.redirectUri, copyValue = "")
+                Text(
+                    text = "请求权限",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (preview.scopeDetails.isEmpty()) {
+                    Text(
+                        text = preview.scopes.joinToString("、"),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                } else {
+                    preview.scopeDetails.forEach { scope ->
+                        Text(
+                            text = if (scope.label.isBlank()) scope.key else "${scope.label}（${scope.key}）",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = !state.oauthActionLoading,
+                onClick = onApprove,
+            ) {
+                if (state.oauthActionLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("处理中…")
+                } else {
+                    ButtonLabel(Icons.Outlined.VerifiedUser, "同意并继续")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(
+                enabled = !state.oauthActionLoading,
+                onClick = onDeny,
+            ) {
+                ButtonLabel(Icons.Outlined.Close, "拒绝")
+            }
+        },
+    )
+}
+
+@Composable
 private fun SessionPanel(
     state: SynapseUiState,
     viewModel: SynapseLoginViewModel,
 ) {
     var showRevokeConfirmation by rememberSaveable { mutableStateOf(false) }
     var showClearConfirmation by rememberSaveable { mutableStateOf(false) }
+    var pendingSessionRevoke by remember { mutableStateOf<SynapseSessionRevokeTarget?>(null) }
+
+    LaunchedEffect(state.credentials.activeAccountId, state.selectedTab) {
+        if (state.selectedTab == SynapseTab.Session && state.hasStoredAccount) {
+            viewModel.loadDeviceSessions()
+        }
+    }
 
     PanelColumn(state = state, onDismissFeedback = viewModel::clearFeedback) {
         SectionTitle(
@@ -1309,6 +1428,12 @@ private fun SessionPanel(
             }
         }
 
+        DeviceSessionsSection(
+            state = state,
+            onRefresh = viewModel::loadDeviceSessions,
+            onRevoke = { pendingSessionRevoke = it },
+        )
+
         SectionCard(
             title = "危险操作",
             subtitle = "清理后需要重新授权本机。",
@@ -1351,6 +1476,194 @@ private fun SessionPanel(
             },
             onDismiss = { showClearConfirmation = false },
         )
+    }
+
+    pendingSessionRevoke?.let { target ->
+        ConfirmActionDialog(
+            title = "撤销${target.label}",
+            message = "这会使目标会话立即失效，并可能要求对应设备或客户端重新登录。当前设备不会出现在可撤销操作中。",
+            confirmText = "撤销",
+            onConfirm = {
+                pendingSessionRevoke = null
+                viewModel.revokeDeviceSession(target)
+            },
+            onDismiss = { pendingSessionRevoke = null },
+        )
+    }
+}
+
+@Composable
+private fun DeviceSessionsSection(
+    state: SynapseUiState,
+    onRefresh: () -> Unit,
+    onRevoke: (SynapseSessionRevokeTarget) -> Unit,
+) {
+    SectionCard(
+        title = "活动设备与客户端",
+        subtitle = "查看当前设备、PiliPlus、网页和其他客户端的活动信息。",
+        icon = Icons.Outlined.Devices,
+        emphasized = true,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "IP 地址仅显示脱敏摘要，属地来自服务端记录。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(
+                enabled = !state.deviceSessionsLoading && state.deviceSessionActionKey == null,
+                onClick = onRefresh,
+            ) {
+                Icon(Icons.Outlined.Refresh, contentDescription = "刷新活动会话")
+            }
+        }
+        if (!state.hasStoredAccount) {
+            Text(
+                text = "登录后可查看活动设备和客户端。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else if (state.deviceSessionsLoading && state.deviceSessions.sessions.isEmpty()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                Text("正在加载活动会话…", style = MaterialTheme.typography.bodyMedium)
+            }
+        } else if (state.deviceSessionsError != null && state.deviceSessions.sessions.isEmpty()) {
+            InfoCard(
+                title = "活动会话不可用",
+                lines = listOf(state.deviceSessionsError ?: "无法加载活动会话。"),
+                icon = Icons.Outlined.WarningAmber,
+            )
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                enabled = state.deviceSessionActionKey == null,
+                onClick = onRefresh,
+            ) {
+                ButtonLabel(Icons.Outlined.Refresh, "重新加载")
+            }
+        } else if (state.deviceSessions.sessions.isEmpty()) {
+            Text(
+                text = "暂无可显示的活动会话。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            state.deviceSessions.sessions.forEach { session ->
+                DeviceSessionRow(
+                    session = session,
+                    currentDeviceKey = state.deviceSessions.currentDeviceKey,
+                    actionKey = state.deviceSessionActionKey,
+                    onRevoke = onRevoke,
+                )
+            }
+        }
+        if (state.deviceSessionsError != null && state.deviceSessions.sessions.isNotEmpty()) {
+            Text(
+                text = state.deviceSessionsError ?: "会话操作失败。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DeviceSessionRow(
+    session: SynapseDeviceSession,
+    currentDeviceKey: String?,
+    actionKey: String?,
+    onRevoke: (SynapseSessionRevokeTarget) -> Unit,
+) {
+    val spacing = LocalPanelSpacing.current
+    val isCurrent = session.isCurrentDevice || session.deviceKey == currentDeviceKey
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = if (isCurrent) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(spacing.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing + 2.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Devices,
+                    contentDescription = null,
+                    tint = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = session.displayClient,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = listOf(session.clientType, session.deviceName)
+                            .filter(String::isNotBlank)
+                            .joinToString(" · ")
+                            .ifBlank { "其他客户端" },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (isCurrent) {
+                    Text(
+                        text = "当前设备",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+            Text(
+                text = "IP 属地：${session.ipLocation ?: "未返回"} · IP：${session.maskedIpAddress}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            session.lastActiveAt?.takeIf(String::isNotBlank)?.let {
+                Text(
+                    text = "最近活动：$it",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (!isCurrent) {
+                OutlinedButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = actionKey == null,
+                    onClick = {
+                        onRevoke(
+                            SynapseSessionRevokeTarget(
+                                kind = SynapseSessionRevokeKind.DEVICE,
+                                id = session.deviceKey ?: session.sessionId,
+                                label = "此设备或客户端的全部会话",
+                            ),
+                        )
+                    },
+                ) {
+                    ButtonLabel(Icons.Outlined.DeleteOutline, "撤销此设备或客户端全部会话")
+                }
+            }
+        }
     }
 }
 

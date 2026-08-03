@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
         }
 
         if (::viewModel.isInitialized) {
-            intent.dataString?.let(viewModel::handleIncomingUri)
+            dispatchIncomingUri(intent)
             viewModel.consumeLiveUpdateIntent(intent)
         }
 
@@ -94,9 +94,16 @@ class MainActivity : ComponentActivity() {
         runCatching { CrashBreadcrumbs.record("MainActivity.onNewIntent") }
         setIntent(intent)
         if (::viewModel.isInitialized) {
-            intent.dataString?.let(viewModel::handleIncomingUri)
+            dispatchIncomingUri(intent)
             viewModel.consumeLiveUpdateIntent(intent)
         }
+    }
+
+    private fun dispatchIncomingUri(intent: Intent) {
+        val rawUri = intent.dataString
+        // Do not retain an incoming OAuth URI, especially if a caller attempted to add a token.
+        intent.data = null
+        rawUri?.let(viewModel::handleIncomingUri)
     }
 
     private fun createSynapseViewModel(app: SynapseApplication): SynapseLoginViewModel? {
