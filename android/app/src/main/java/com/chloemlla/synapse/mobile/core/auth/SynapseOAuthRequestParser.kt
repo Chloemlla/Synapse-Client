@@ -1,7 +1,7 @@
 package com.chloemlla.synapse.mobile.core.auth
 
-import android.net.Uri
 import java.net.URI
+import java.net.URLDecoder
 
 internal object SynapseOAuthRequestParser {
     private val allowedParameters = setOf(
@@ -33,7 +33,13 @@ internal object SynapseOAuthRequestParser {
     private val pkcePattern = Regex("^[A-Za-z0-9._~-]{43,128}$")
 
     fun parse(raw: String, trustedProviderOrigin: String): SynapseOAuthAuthorizationRequest {
-        val uri = Uri.parse(raw.trim())
+        val uri = try {
+            parseUri(raw.trim())
+        } catch (error: Exception) {
+            throw SynapseOAuthRequestException(
+                message = error.message ?: "OAuth 请求无效。",
+            )
+        }
         val safeRedirect = runCatching { safeRedirectUri(uri) }.getOrNull()
         val safeState = uri.getQueryParameter("state")?.trim()?.takeIf { it.isNotBlank() }
 
@@ -102,13 +108,15 @@ internal object SynapseOAuthRequestParser {
     }
 
     fun isOAuthRelated(raw: String): Boolean {
-        val uri = Uri.parse(raw.trim())
-        return uri.scheme.equals("synapse", ignoreCase = true) &&
-            uri.host.equals("oauth", ignoreCase = true)
+        return runCatching {
+            val uri = parseUri(raw.trim())
+            uri.scheme.equals("synapse", ignoreCase = true) &&
+                uri.host.equals("oauth", ignoreCase = true)
+        }.getOrDefault(false)
     }
 
     fun safeErrorRedirectUri(raw: String, error: String, description: String): String? {
-        val uri = Uri.parse(raw.trim())
+        val uri = runCatching { parseUri(raw.trim()) }.getOrNull() ?: return null
         val redirectUri = runCatching { safeRedirectUri(uri) }.getOrNull() ?: return null
         val state = uri.getQueryParameter("state")?.trim().orEmpty()
         if (state.isBlank() || state.length > 500) return null
@@ -127,8 +135,8 @@ internal object SynapseOAuthRequestParser {
         request: SynapseOAuthAuthorizationRequest,
         approved: Boolean,
     ): String {
-        val actual = Uri.parse(callbackUri)
-        val expected = Uri.parse(request.redirectUri)
+        val actual = parseUriOrThrow(callbackUri, "OAuth 回调地址无效。")
+        val expected = parseUriOrThrow(request.redirectUri, "OAuth redirect_uri 无效。")
         require(actual.scheme.equals(expected.scheme, ignoreCase = true)) { "OAuth 回调 scheme 不匹配。" }
         require(actual.host.equals(expected.host, ignoreCase = true)) { "OAuth 回调 host 不匹配。" }
         require(actual.port == expected.port && normalizedPath(actual) == normalizedPath(expected)) { "OAuth 回调地址不匹配。" }
@@ -151,17 +159,17 @@ internal object SynapseOAuthRequestParser {
         } else {
             require(actual.getQueryParameter("error") == "access_denied") { "OAuth 拒绝回调错误码不匹配。" }
         }
-        return actual.toString()
+        return actual.raw
     }
 
-    private fun required(uri: Uri, name: String): String =
+    private fun required(uri: ParsedUri, name: String): String =
         uri.getQueryParameter(name)?.trim()?.takeIf { it.isNotBlank() }
             ?: throw IllegalArgumentException("OAuth 缺少 $name。")
 
-    private fun optional(uri: Uri, name: String): String? =
+    private fun optional(uri: ParsedUri, name: String): String? =
         uri.getQueryParameter(name)?.trim()?.takeIf { it.isNotBlank() }?.take(160)
 
-    private fun safeRedirectUri(uri: Uri): String {
+    private fun safeRedirectUri(uri: ParsedUri): String {
         val raw = uri.getQueryParameter("redirect_uri")?.trim()
             ?: throw IllegalArgumentException("OAuth 缺少 redirect_uri。")
         require(isSafeRedirectBase(raw, uri.getQueryParameter("client_id"))) {
@@ -171,7 +179,7 @@ internal object SynapseOAuthRequestParser {
     }
 
     private fun isSafeRedirectBase(raw: String, clientId: String? = null): Boolean = runCatching {
-        isAllowedRedirectUri(raw, clientId) && Uri.parse(raw).queryParameterNames.none {
+        isAllowedRedirectUri(raw, clientId) && parseUri(raw).queryParameterNames.none {
             it.lowercase() in SENSITIVE_PARAMETERS || it in CALLBACK_PARAMETERS
         }
     }.getOrDefault(false)
@@ -204,8 +212,54 @@ internal object SynapseOAuthRequestParser {
             uri.fragment == null
     }.getOrDefault(false)
 
-    private fun normalizedPath(uri: Uri): String =
+    private fun normalizedPath(uri: ParsedUri): String =
         uri.path.orEmpty().trimEnd('/').ifBlank { "/" }
+
+    private fun parseUriOrThrow(raw: String, message: String): ParsedUri =
+        runCatching { parseUri(raw.trim()) }.getOrElse { error ->
+            throw IllegalArgumentException(message, error)
+        }
+
+    private fun parseUri(raw: String): ParsedUri {
+        val parsed = URI(raw)
+        val parameters = linkedMapOf<String, MutableList<String>>()
+        parsed.rawQuery.orEmpty()
+            .split('&')
+            .filter(String::isNotEmpty)
+            .forEach { component ->
+                val separator = component.indexOf('=')
+                val rawName = if (separator >= 0) component.substring(0, separator) else component
+                val rawValue = if (separator >= 0) component.substring(separator + 1) else ""
+                val name = decodeQueryComponent(rawName)
+                val value = decodeQueryComponent(rawValue)
+                parameters.getOrPut(name) { mutableListOf() }.add(value)
+            }
+        return ParsedUri(raw, parsed, parameters.mapValues { it.value.toList() })
+    }
+
+    private fun decodeQueryComponent(value: String): String =
+        runCatching { URLDecoder.decode(value, "UTF-8") }.getOrDefault(value)
+
+    private data class ParsedUri(
+        val raw: String,
+        val parsed: URI,
+        val queryParameters: Map<String, List<String>>,
+    ) {
+        val scheme: String?
+            get() = parsed.scheme
+        val host: String?
+            get() = parsed.host
+        val path: String?
+            get() = parsed.path
+        val fragment: String?
+            get() = parsed.fragment
+        val port: Int
+            get() = parsed.port
+        val queryParameterNames: Set<String>
+            get() = queryParameters.keys
+
+        fun getQueryParameter(name: String): String? = queryParameters[name]?.firstOrNull()
+    }
 
     private val SENSITIVE_PARAMETERS = setOf(
         "access_token",

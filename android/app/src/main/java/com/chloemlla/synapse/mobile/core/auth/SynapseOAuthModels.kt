@@ -1,6 +1,7 @@
 package com.chloemlla.synapse.mobile.core.auth
 
-import android.net.Uri
+import java.net.URI
+import java.net.URLEncoder
 
 data class SynapseOAuthAuthorizationRequest(
     val providerOrigin: String,
@@ -81,12 +82,35 @@ internal fun appendCallbackParameters(
     redirectUri: String,
     parameters: Map<String, String>,
 ): String {
-    val builder = Uri.parse(redirectUri).buildUpon()
-    parameters.forEach { (name, value) ->
-        builder.appendQueryParameter(name, value)
+    val uri = URI(redirectUri)
+    val appendedQuery = parameters.entries.joinToString("&") { (name, value) ->
+        "${encodeQueryComponent(name)}=${encodeQueryComponent(value)}"
     }
-    return builder.build().toString()
+    val query = listOfNotNull(uri.rawQuery?.takeIf { it.isNotEmpty() }, appendedQuery)
+        .joinToString("&")
+    return buildString {
+        uri.scheme?.let {
+            append(it)
+            append(':')
+        }
+        uri.rawAuthority?.let {
+            append("//")
+            append(it)
+        }
+        append(uri.rawPath.orEmpty())
+        if (query.isNotEmpty()) {
+            append('?')
+            append(query)
+        }
+        uri.rawFragment?.let {
+            append('#')
+            append(it)
+        }
+    }
 }
+
+private fun encodeQueryComponent(value: String): String =
+    URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
 data class SynapseDeviceSession(
     val sessionId: String,
