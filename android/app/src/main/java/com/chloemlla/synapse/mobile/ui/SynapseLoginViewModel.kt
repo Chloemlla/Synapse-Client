@@ -770,15 +770,16 @@ class SynapseLoginViewModel(
                         )
                     }
                 }
-                .onFailure {
+                .onFailure { error ->
+                    val errorMessage = SynapseFailureMessage.from(error, fallback = "OAuth 授权预览失败", context = "OAuth preview")
                     mutableState.update {
                         it.copy(
                             pendingOAuthRequest = null,
                             oauthPreview = null,
                             oauthLoading = false,
-                            oauthCallbackUri = request.errorRedirectUri("server_error", "OAuth 授权预览失败。"),
-                            error = null,
-                            status = "OAuth 授权无法继续，正在返回请求方。",
+                            oauthCallbackUri = null,
+                            error = errorMessage,
+                            status = "",
                         )
                     }
                 }
