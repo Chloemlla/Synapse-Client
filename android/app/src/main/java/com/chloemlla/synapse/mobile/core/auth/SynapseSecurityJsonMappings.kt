@@ -143,7 +143,26 @@ private fun JSONObject.locationLabel(): String? {
             location.firstString("city"),
         ).joinToString(" · ").takeIf { it.isNotBlank() }
     }
-    return firstString("ipLocation", "ip_location", "location", "region", "country")
+    val raw = firstString("ipLocation", "ip_location", "location", "region", "country")
+    return raw.takeIf { it != null && !it.isErrorLabel() }
+}
+
+/**
+ * Filters out server-side error messages that are returned as location labels.
+ * When the server's IP geolocation service fails, it may return an error
+ * message string (e.g. "获取位置时出错") instead of a proper location or null.
+ * These are not valid location labels and should be treated as absent.
+ */
+private fun String.isErrorLabel(): Boolean {
+    val lower = lowercase().trim()
+    if (lower.length > 60) return true
+    return lower.contains("出错") ||
+        lower.contains("失败") ||
+        lower.contains("错误") ||
+        lower.contains("异常") ||
+        lower.contains("error") ||
+        lower.contains("fail") ||
+        lower.contains("exception")
 }
 
 private fun JSONArray.toStringList(): List<String> =
