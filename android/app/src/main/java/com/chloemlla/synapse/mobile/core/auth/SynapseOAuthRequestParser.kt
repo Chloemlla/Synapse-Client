@@ -64,7 +64,7 @@ internal object SynapseOAuthRequestParser {
 
             val clientId = required(uri, "client_id")
             val redirectUri = required(uri, "redirect_uri")
-            require(isAllowedRedirectUri(redirectUri, clientId)) { "OAuth redirect_uri 不是安全的已登记地址。" }
+            require(isSafeRedirectBase(redirectUri, clientId)) { "OAuth redirect_uri 不是安全的已登记地址。" }
 
             val scopes = required(uri, "scope")
                 .split(Regex("\\s+"))
