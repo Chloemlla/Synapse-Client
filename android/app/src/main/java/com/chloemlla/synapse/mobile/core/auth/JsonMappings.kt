@@ -224,6 +224,14 @@ internal fun JSONObject.toTotpVerificationResult(): TotpVerificationResult {
     )
 }
 
+internal fun JSONObject.toIpLocationResult(): IpLocationResult =
+    IpLocationResult(
+        ip = firstString("ip").orEmpty(),
+        country = firstString("country"),
+        region = firstString("region"),
+        city = firstString("city"),
+    )
+
 internal fun JSONObject.toSynapseUser(): SynapseUser =
     SynapseUser(
         id = optString("id"),

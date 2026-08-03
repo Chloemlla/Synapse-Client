@@ -207,6 +207,25 @@ data class GoogleAuthConfig(
     val canSignIn: Boolean = enabled && clientIdConfigured && !clientId.isNullOrBlank()
 }
 
+/**
+ * Result from the standalone IP geolocation endpoint (`/api/ip`).
+ * Used as a fallback when the device sessions endpoint does not return
+ * a valid IP location for the current device.
+ */
+data class IpLocationResult(
+    val ip: String,
+    val country: String?,
+    val region: String?,
+    val city: String?,
+) {
+    val locationLabel: String?
+        get() = listOfNotNull(
+            country?.takeIf { it.isNotBlank() },
+            region?.takeIf { it.isNotBlank() },
+            city?.takeIf { it.isNotBlank() },
+        ).joinToString(" · ").takeIf { it.isNotBlank() }
+}
+
 data class GoogleAuthLoginResult(
     val token: String,
     val user: SynapseUser,

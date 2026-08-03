@@ -79,8 +79,40 @@ class SynapseAuthRepository(
         )
     }
 
-    suspend fun listDeviceSessions(): SynapseDeviceSessions =
-        apiFor(trustedApiOrigin).listDeviceSessions(authenticatedJwt())
+    suspend fun listDeviceSessions(): SynapseDeviceSessions {
+        val api = apiFor(trustedApiOrigin)
+        val sessions = api.listDeviceSessions(authenticatedJwt())
+        return sessions.withIpLocationFallback(api)
+    }
+
+    /**
+     * If the current device's IP location is absent, try the standalone
+     * `/api/ip` endpoint as a fallback. This covers cases where the server's
+     * session-level geolocation service fails but the basic IP geo endpoint
+     * works.
+     */
+    private suspend fun SynapseDeviceSessions.withIpLocationFallback(
+        api: SynapseMobileLoginApi,
+    ): SynapseDeviceSessions {
+        val currentKey = currentDeviceKey
+        val currentSession = sessions.firstOrNull { it.deviceKey == currentKey }
+        if (currentKey == null || currentSession == null || currentSession.ipLocation != null) {
+            return this
+        }
+        return try {
+            val ipLocation = api.getIpLocation()
+            val label = ipLocation.locationLabel
+            if (label.isNullOrBlank()) return this
+            copy(
+                sessions = sessions.map { session ->
+                    if (session.deviceKey == currentKey) session.copy(ipLocation = label)
+                    else session
+                },
+            )
+        } catch (_: Exception) {
+            this
+        }
+    }
 
     suspend fun revokeSession(target: SynapseSessionRevokeTarget): Boolean {
         require(target.id.isNotBlank()) { "缺少要撤销的会话标识。" }

@@ -93,6 +93,16 @@ class SynapseMobileLoginApi(
             body = JSONObject().put("ticket", ticket),
         ) { it.toLinuxDoLoginResult() }
 
+    /**
+     * Standalone IP geolocation endpoint. Used as a fallback when the device
+     * sessions endpoint does not return a valid IP location for the current
+     * device. Does not require authentication.
+     */
+    suspend fun getIpLocation(): IpLocationResult =
+        get(
+            path = "/api/ip",
+        ) { it.toIpLocationResult() }
+
     suspend fun getGoogleAuthConfig(): GoogleAuthConfig =
         get(
             path = "/api/auth/google/config?client=synapse-android",
