@@ -63,6 +63,16 @@
                     android:scheme="synapse" />
             </intent-filter>
 
+            <!-- synapse://ping health check: other apps can detect if Synapse-Client is installed -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="ping"
+                    android:scheme="synapse" />
+            </intent-filter>
+
             <!--
               Android App Links for Happy-TTS Linux.do OAuth completion.
               Requires Digital Asset Links at:

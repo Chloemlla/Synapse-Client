@@ -103,6 +103,14 @@ class MainActivity : ComponentActivity() {
         val rawUri = intent.dataString
         // Do not retain an incoming OAuth URI, especially if a caller attempted to add a token.
         intent.data = null
+
+        // synapse://ping health check: the app was opened successfully, which confirms
+        // availability. No further action needed.
+        if (rawUri != null) {
+            val uri = android.net.Uri.parse(rawUri)
+            if ("synapse" == uri.scheme && "ping" == uri.host) return
+        }
+
         rawUri?.let(viewModel::handleIncomingUri)
     }
 
