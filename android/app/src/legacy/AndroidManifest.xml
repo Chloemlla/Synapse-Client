@@ -19,17 +19,5 @@
             android:enabled="true"
             android:grantUriPermissions="false"
             android:permission="com.synapse.mobile.permission.READ_MIGRATION_CONFIG" />
-
-        <!--
-          Satisfy HMS Scan Kit manifest merger: library declares
-          tools:node="remove" on these meta-data entries, but they are not
-          present in the legacy build variant's merged manifest.
-        -->
-        <meta-data
-            android:name="com.huawei.hms.min_api_level"
-            android:value="hquic-provider:huawei_module_quic_pro" />
-        <meta-data
-            android:name="com.huawei.hms.min_api_level"
-            android:value="hquic-provider:huawei_module_quic" />
     </application>
 </manifest>
