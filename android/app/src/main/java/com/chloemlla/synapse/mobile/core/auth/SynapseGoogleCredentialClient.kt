@@ -180,7 +180,12 @@ class SynapseGoogleCredentialClient(
      * If silentSignIn() fails (e.g. the account needs interactive re-auth),
      * the error message guides the user to re-add their Google account in
      * system settings, which is the only reliable client-side fix.
+     *
+     * GoogleSignIn and GoogleSignInOptions are deprecated in the latest Play
+     * Services but remain the only reliable fallback when Credential Manager
+     * cannot recover from account reauth failures (code 16).
      */
+    @Suppress("DEPRECATION")
     private suspend fun requestGoogleSignInClientFallback(
         activity: Activity,
         serverClientId: String,
