@@ -105,10 +105,14 @@ class MainActivity : ComponentActivity() {
         intent.data = null
 
         // synapse://ping health check: the app was opened successfully, which confirms
-        // availability. No further action needed.
+        // availability. Finish immediately so the user is returned to the calling app
+        // (e.g. browser) without seeing the Synapse-Client UI.
         if (rawUri != null) {
             val uri = android.net.Uri.parse(rawUri)
-            if ("synapse" == uri.scheme && "ping" == uri.host) return
+            if ("synapse" == uri.scheme && "ping" == uri.host) {
+                finish()
+                return
+            }
         }
 
         rawUri?.let(viewModel::handleIncomingUri)
