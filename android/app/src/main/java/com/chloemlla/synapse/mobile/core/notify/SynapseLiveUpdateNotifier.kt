@@ -94,7 +94,7 @@ class SynapseLiveUpdateNotifier(
         )
 
         val builder = NotificationCompat.Builder(appContext, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_synapse)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(snapshot.title)
             .setContentText(snapshot.text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(snapshot.text))
