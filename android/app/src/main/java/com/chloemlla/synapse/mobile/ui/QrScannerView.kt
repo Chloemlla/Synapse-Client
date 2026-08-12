@@ -41,10 +41,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.google.mlkit.vision.barcode.BarcodeScanner
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Public scanner entry used by [SynapseMobileApp]. Handles the camera
@@ -119,9 +123,17 @@ private fun MlKitCameraQrScanner(
     val lifecycleOwner = LocalLifecycleOwner.current
     val analyzerExecutor = remember { Executors.newSingleThreadExecutor() }
     val consumed = remember { AtomicBoolean(false) }
+    val disposed = remember { AtomicBoolean(false) }
+    val scannerRef = remember { AtomicReference<BarcodeScanner?>(null) }
+    val analysisRef = remember { AtomicReference<ImageAnalysis?>(null) }
+    val cameraProviderRef = remember { AtomicReference<ProcessCameraProvider?>(null) }
 
     DisposableEffect(Unit) {
         onDispose {
+            disposed.set(true)
+            analysisRef.getAndSet(null)?.clearAnalyzer()
+            cameraProviderRef.getAndSet(null)?.unbindAll()
+            scannerRef.getAndSet(null)?.close()
             analyzerExecutor.shutdown()
         }
     }
@@ -134,43 +146,65 @@ private fun MlKitCameraQrScanner(
             .background(MaterialTheme.colorScheme.surfaceContainer),
         factory = { viewContext ->
             val previewView = PreviewView(viewContext)
+            val options = BarcodeScannerOptions.Builder()
+                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                .build()
+            val scanner = BarcodeScanning.getClient(options)
+            scannerRef.set(scanner)
             val cameraProviderFuture = ProcessCameraProvider.getInstance(viewContext)
             cameraProviderFuture.addListener(
                 {
-                    val cameraProvider = cameraProviderFuture.get()
+                    if (disposed.get()) return@addListener
+                    val cameraProvider = try {
+                        cameraProviderFuture.get()
+                    } catch (error: Exception) {
+                        return@addListener
+                    }
+                    if (disposed.get()) return@addListener
                     val preview = Preview.Builder().build().also {
                         it.setSurfaceProvider(previewView.surfaceProvider)
                     }
-                    val scanner = BarcodeScanning.getClient()
                     val analysis = ImageAnalysis.Builder()
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
-
+                        .also { analysisRef.set(it) }
                     analysis.setAnalyzer(analyzerExecutor) { imageProxy ->
+                        if (disposed.get()) {
+                            imageProxy.close()
+                            return@setAnalyzer
+                        }
                         val mediaImage = imageProxy.image
                         if (mediaImage == null || consumed.get()) {
                             imageProxy.close()
                             return@setAnalyzer
                         }
-
-                        val image = InputImage.fromMediaImage(
-                            mediaImage,
-                            imageProxy.imageInfo.rotationDegrees,
-                        )
-                        scanner.process(image)
-                            .addOnSuccessListener { barcodes ->
-                                val raw = barcodes.firstNotNullOfOrNull { barcode ->
-                                    barcode.rawValue?.takeIf { it.isNotBlank() }
-                                }
-                                if (raw != null && consumed.compareAndSet(false, true)) {
-                                    onQrCode(raw)
-                                }
+                        val inputImage = try {
+                            InputImage.fromMediaImage(
+                                mediaImage,
+                                imageProxy.imageInfo.rotationDegrees,
+                            )
+                        } catch (error: Exception) {
+                            imageProxy.close()
+                            return@setAnalyzer
+                        }
+                        val task = try {
+                            scanner.process(inputImage)
+                        } catch (error: Exception) {
+                            imageProxy.close()
+                            return@setAnalyzer
+                        }
+                        task.addOnSuccessListener { barcodes ->
+                            val raw = barcodes.firstNotNullOfOrNull { barcode ->
+                                barcode.rawValue?.takeIf { it.isNotBlank() }
                             }
-                            .addOnCompleteListener {
-                                imageProxy.close()
+                            if (raw != null && consumed.compareAndSet(false, true)) {
+                                onQrCode(raw)
                             }
+                        }.addOnCompleteListener {
+                            imageProxy.close()
+                        }
                     }
-
+                    cameraProviderRef.set(cameraProvider)
                     runCatching {
                         cameraProvider.unbindAll()
                         cameraProvider.bindToLifecycle(
