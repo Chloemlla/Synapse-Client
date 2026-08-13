@@ -2,7 +2,7 @@ import java.net.URI
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    // AGP 9 provides built-in Kotlin; org.jetbrains.kotlin.android is not applied.
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -145,15 +145,25 @@ android {
 }
 
 kotlin {
-    jvmToolchain(21)
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
     }
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
+    val composeBom = platform("androidx.compose:compose-bom:2026.08.00")
     implementation(composeBom)
+
+    val lumenCrashVersion: String =
+        providers.gradleProperty("lumenCrashVersion").orNull?.takeIf { it.isNotBlank() }
+            ?: providers.environmentVariable("LUMEN_CRASH_VERSION").orNull?.takeIf { it.isNotBlank() }
+            ?: runCatching { rootProject.file("lumen-crash.resolved.version").readText().trim() }
+                .getOrNull()?.takeIf { it.isNotBlank() }
+            ?: error(
+                "Resolve the latest lumen-crash SDK first: run .github/scripts/fetch-lumen-crash-sdk.py, " +
+                    "or set lumenCrashVersion (gradle.properties) / LUMEN_CRASH_VERSION (env).",
+            )
+    implementation("com.chloemlla.lumen:lumen-crash:$lumenCrashVersion")
 
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.compose.material3:material3")
@@ -161,27 +171,26 @@ dependencies {
     implementation("androidx.compose.runtime:runtime")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.core:core-ktx:1.16.0")
-    implementation("com.chloemlla.lumen:lumen-crash:0.1.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    implementation("androidx.credentials:credentials:1.5.0")
-    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
-    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
-    implementation("com.google.android.gms:play-services-auth:21.2.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.tencent:mmkv:2.4.0")
+    implementation("androidx.core:core-ktx:1.19.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
+    implementation("androidx.security:security-crypto:1.1.0")
+    implementation("androidx.credentials:credentials:1.6.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
+    implementation("com.google.android.gms:play-services-auth:21.6.0")
+    implementation("com.squareup.okhttp3:okhttp:5.4.0")
+    implementation("com.tencent:mmkv:2.4.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
-    implementation("androidx.camera:camera-camera2:1.4.2")
-    implementation("androidx.camera:camera-lifecycle:1.4.2")
-    implementation("androidx.camera:camera-view:1.4.2")
+    implementation("androidx.camera:camera-camera2:1.6.1")
+    implementation("androidx.camera:camera-lifecycle:1.6.1")
+    implementation("androidx.camera:camera-view:1.6.1")
     // ML Kit on-device barcode scanning (CameraX frames + album decode).
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
 
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.json:json:20240303")
+    testImplementation("org.json:json:20260719")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

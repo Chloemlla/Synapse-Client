@@ -4,3 +4,6 @@ local.properties
 captures/
 *.iml
 app/build/
+# Staged lumen-crash SDK release assets (fetched by .github/scripts/fetch-lumen-crash-sdk.py)
+local-maven/
+lumen-crash.resolved.version

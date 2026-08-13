@@ -45,6 +45,13 @@ jobs:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
           cache-cleanup: on-success
 
+      - name: Resolve and stage lumen-crash SDK
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 ../.github/scripts/fetch-lumen-crash-sdk.py
+          echo "LUMEN_CRASH_VERSION=$(cat lumen-crash.resolved.version)" >> "$GITHUB_ENV"
+
       - name: Run repository policy checks
         working-directory: .
         run: python3 .github/scripts/validate-synapse-android-policy.py
@@ -67,6 +74,7 @@ jobs:
           SYNAPSE_SHORT_HASH: ${{ env.SYNAPSE_SHORT_HASH }}
           SYNAPSE_BUILD_TIME: ${{ env.SYNAPSE_BUILD_TIME }}
           SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
+          LUMEN_CRASH_VERSION: ${{ env.LUMEN_CRASH_VERSION }}
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.LUMEN_CRASH_READ_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
         run: gradle testProductionDebugUnitTest --no-daemon --warning-mode all
@@ -78,6 +86,7 @@ jobs:
           SYNAPSE_SHORT_HASH: ${{ env.SYNAPSE_SHORT_HASH }}
           SYNAPSE_BUILD_TIME: ${{ env.SYNAPSE_BUILD_TIME }}
           SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
+          LUMEN_CRASH_VERSION: ${{ env.LUMEN_CRASH_VERSION }}
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.LUMEN_CRASH_READ_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
         run: gradle lintProductionDebug --no-daemon --warning-mode all
@@ -108,6 +117,7 @@ jobs:
           SYNAPSE_SHORT_HASH: ${{ env.SYNAPSE_SHORT_HASH }}
           SYNAPSE_BUILD_TIME: ${{ env.SYNAPSE_BUILD_TIME }}
           SYNAPSE_API_BASE_URL: ${{ secrets.SYNAPSE_API_BASE_URL }}
+          LUMEN_CRASH_VERSION: ${{ env.LUMEN_CRASH_VERSION }}
           KEYSTORE_FILE: ${{ env.KEYSTORE_FILE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
