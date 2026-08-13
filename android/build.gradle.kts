@@ -1,5 +1,5 @@
 plugins {
-    id("com.android.application") version "8.13.2" apply false
-    id("org.jetbrains.kotlin.android") version "2.1.20" apply false
-    id("org.jetbrains.kotlin.plugin.compose") version "2.1.20" apply false
+    id("com.android.application") version "9.3.1" apply false
+    // AGP 9 provides built-in Kotlin (KGP 2.2.10); do NOT apply org.jetbrains.kotlin.android.
+    id("org.jetbrains.kotlin.plugin.compose") version "2.2.10" apply false
 }
