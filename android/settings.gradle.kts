@@ -13,11 +13,11 @@ dependencyResolutionManagement {
         mavenCentral()
         maven {
             name = "LumenCrashLocal"
-            url = uri(layout.settingsDirectory.resolve("local-maven"))
+            url = uri(layout.settingsDirectory.asFile.resolve("local-maven"))
         }
         val gprUser = providers.gradleProperty("gpr.user").orNull ?: System.getenv("GITHUB_ACTOR")
         val gprKey = providers.gradleProperty("gpr.key").orNull ?: System.getenv("GITHUB_TOKEN")
-        if (gprUser && gprKey) {
+        if (!gprUser.isNullOrBlank() && !gprKey.isNullOrBlank()) {
             maven {
                 name = "GitHubPackagesProjectLumen"
                 url = uri("https://maven.pkg.github.com/Chloemlla/Project-Lumen")
