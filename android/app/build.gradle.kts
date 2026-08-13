@@ -155,6 +155,17 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
 
+    val lumenCrashVersion: String =
+        providers.gradleProperty("lumenCrashVersion").orNull?.takeIf { it.isNotBlank() }
+            ?: providers.environmentVariable("LUMEN_CRASH_VERSION").orNull?.takeIf { it.isNotBlank() }
+            ?: runCatching { rootProject.file("lumen-crash.resolved.version").readText().trim() }
+                .getOrNull()?.takeIf { it.isNotBlank() }
+            ?: error(
+                "Resolve the latest lumen-crash SDK first: run .github/scripts/fetch-lumen-crash-sdk.py, " +
+                    "or set lumenCrashVersion (gradle.properties) / LUMEN_CRASH_VERSION (env).",
+            )
+    implementation("com.chloemlla.lumen:lumen-crash:$lumenCrashVersion")
+
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
@@ -162,7 +173,6 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.core:core-ktx:1.16.0")
-    implementation("com.chloemlla.lumen:lumen-crash:0.1.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")

@@ -53,6 +53,11 @@ class SynapseApplication : Application() {
                 shareSubject = runCatching { getString(R.string.crash_report_share_subject) }.getOrNull(),
                 reportTitle = runCatching { getString(R.string.crash_report_title) }.getOrNull(),
                 reportMessage = runCatching { getString(R.string.crash_report_message) }.getOrNull(),
+                anrWatchdogEnabled = true,
+                anrWatchdogTimeoutMillis = 5_000L,
+                anrWatchdogCheckIntervalMillis = 1_000L,
+                startupHangWatchdogEnabled = true,
+                startupHangTimeoutMillis = 15_000L,
             ),
         )
         lumenCrashAvailable = LumenCrash.isInstalled()

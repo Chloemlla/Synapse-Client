@@ -8,13 +8,16 @@ import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import com.chloemlla.lumen.crash.CrashBreadcrumbs
+import com.chloemlla.lumen.crash.LumenCrash
 import com.chloemlla.lumen.crash.ui.LumenCrashReportScreen
 import com.chloemlla.synapse.mobile.core.auth.SynapseAuthRepository
 import com.chloemlla.synapse.mobile.ui.SynapseLoginViewModel
@@ -52,6 +55,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             var startupReport by remember { mutableStateOf(initialStartupReport) }
             SynapseMobileTheme {
+                LaunchedEffect(Unit) {
+                    withFrameNanos { }
+                    runCatching { LumenCrash.markStartupComplete() }
+                }
                 val report = startupReport
                 if (report != null) {
                     // Prefer the SDK crash UI. If it cannot render (e.g. fail-closed integrity),

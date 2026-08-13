@@ -12,13 +12,19 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven {
-            name = "GitHubPackagesProjectLumen"
-            url = uri("https://maven.pkg.github.com/Chloemlla/Project-Lumen")
-            credentials {
-                username = providers.gradleProperty("gpr.user").orNull
-                    ?: System.getenv("GITHUB_ACTOR")
-                password = providers.gradleProperty("gpr.key").orNull
-                    ?: System.getenv("GITHUB_TOKEN")
+            name = "LumenCrashLocal"
+            url = uri(layout.settingsDirectory.resolve("local-maven"))
+        }
+        val gprUser = providers.gradleProperty("gpr.user").orNull ?: System.getenv("GITHUB_ACTOR")
+        val gprKey = providers.gradleProperty("gpr.key").orNull ?: System.getenv("GITHUB_TOKEN")
+        if (gprUser && gprKey) {
+            maven {
+                name = "GitHubPackagesProjectLumen"
+                url = uri("https://maven.pkg.github.com/Chloemlla/Project-Lumen")
+                credentials {
+                    username = gprUser
+                    password = gprKey
+                }
             }
         }
     }

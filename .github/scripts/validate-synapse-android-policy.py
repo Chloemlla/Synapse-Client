@@ -53,9 +53,16 @@ require_contains("android/app/build.gradle.kts", 'create("legacy")')
 require_contains("android/app/build.gradle.kts", 'create("production")')
 
 require_contains("android/settings.gradle.kts", "maven.pkg.github.com/Chloemlla/Project-Lumen")
-require_contains("android/app/build.gradle.kts", 'implementation("com.chloemlla.lumen:lumen-crash:0.1.0")')
+require_contains("android/app/build.gradle.kts", 'implementation("com.chloemlla.lumen:lumen-crash:$lumenCrashVersion")')
 require_contains("android/app/src/main/java/com/chloemlla/synapse/mobile/SynapseApplication.kt", "LumenCrash.install")
 require_contains("android/app/src/main/java/com/chloemlla/synapse/mobile/MainActivity.kt", "LumenCrashReportScreen")
+
+require_file(".github/scripts/fetch-lumen-crash-sdk.py")
+require_contains("android/settings.gradle.kts", "LumenCrashLocal")
+require_contains("android/app/build.gradle.kts", "LUMEN_CRASH_VERSION")
+require_contains("android/app/build.gradle.kts", "lumen-crash.resolved.version")
+require_contains(".github/workflows/synapse-android.yml", "fetch-lumen-crash-sdk.py")
+require_contains(".github/workflows/synapse-android.yml", "LUMEN_CRASH_VERSION")
 
 require_contains("android/app/src/main/AndroidManifest.xml", "POST_PROMOTED_NOTIFICATIONS")
 require_contains("android/app/src/main/AndroidManifest.xml", "POST_NOTIFICATIONS")
