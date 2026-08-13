@@ -9,11 +9,13 @@ import java.util.UUID
 
 class SynapseCredentialStore(context: Context) {
     private val appContext = context.applicationContext
+    @Suppress("DEPRECATION")
     private val masterKey by lazy {
         MasterKey.Builder(appContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
     }
+    @Suppress("DEPRECATION")
     private val secureMetadata by lazy {
         EncryptedSharedPreferences.create(
             appContext,
@@ -25,7 +27,6 @@ class SynapseCredentialStore(context: Context) {
     }
     private val encryptedStore by lazy {
         MMKV.mmkvWithID(STORE_NAME, MMKV.SINGLE_PROCESS_MODE, mmkvCryptKey())
-            ?: error("Unable to open Synapse credential store.")
     }
 
     fun saveJwt(jwt: String, user: SynapseUser? = null) {

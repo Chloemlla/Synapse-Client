@@ -258,6 +258,7 @@ internal fun JSONObject.firstStringList(vararg names: String): List<String> =
         when (val value = opt(name)) {
             is JSONArray -> value.toStringList()
             is String -> value.split(',', '|').map { it.trim() }.filter { it.isNotBlank() }
+            null -> null
             else -> null
         }?.takeIf { it.isNotEmpty() }
     }.orEmpty()

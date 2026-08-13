@@ -147,6 +147,7 @@ internal object SynapseApiErrorFormatter {
             when (val value = opt(name)) {
                 is String -> value
                 is Number, is Boolean -> value.toString()
+                null -> null
                 else -> null
             }?.takeIf { it.isNotBlank() }
         }

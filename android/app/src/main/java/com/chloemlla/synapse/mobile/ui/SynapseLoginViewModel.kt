@@ -1305,8 +1305,8 @@ class SynapseLoginViewModel(
         if (!usable) return
         liveUpdateNotifier?.publish(
             SynapseLiveUpdateCopy.webQrWaiting(
-                site = payload?.apiBaseUrl,
-                expiresAtEpochMillis = payload?.expiresAt?.toEpochMilli(),
+                site = payload.apiBaseUrl,
+                expiresAtEpochMillis = payload.expiresAt?.toEpochMilli(),
             ),
         )
         activeLiveUpdateKind = SynapseLiveUpdateKind.WebQrLogin

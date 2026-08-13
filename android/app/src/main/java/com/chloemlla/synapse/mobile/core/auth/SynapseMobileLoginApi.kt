@@ -333,7 +333,7 @@ class SynapseMobileLoginApi(
             .build()
 
         httpClient.newCall(request).execute().use { response ->
-            val responseText = response.body?.string().orEmpty()
+            val responseText = response.body.string()
             if (!response.isSuccessful) {
                 throw SynapseApiException(
                     response.code,
@@ -371,7 +371,7 @@ class SynapseMobileLoginApi(
             .build()
 
         httpClient.newCall(request).execute().use { response ->
-            val responseText = response.body?.string().orEmpty()
+            val responseText = response.body.string()
             if (!response.isSuccessful) {
                 throw SynapseApiException(
                     response.code,
