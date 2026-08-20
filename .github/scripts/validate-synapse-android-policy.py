@@ -73,7 +73,17 @@ require_contains("android/app/proguard-rules.pro", "Lumen Crash SDK minify exemp
 require_contains("android/app/proguard-rules.pro", "com.chloemlla.lumen.crash.CrashAuthorAttribution")
 require_contains("android/app/proguard-rules.pro", "-keep class com.chloemlla.lumen.crash.** { *; }")
 
-
+# Release builds run with isShrinkResources = true, which strips the SDK's crash-UI
+# strings/plurals unless keep.xml pins them, and R8 renaming the author/integrity symbols
+# makes the SDK fail closed (white-screen cold start). The SDK-owned FileProvider authority
+# is the only one whose declared paths match the SDK's share writer.
+require_file("android/app/src/main/res/raw/keep.xml")
+require_contains("android/app/src/main/res/raw/keep.xml", "@string/lumen_crash_*")
+require_contains("android/app/src/main/res/raw/keep.xml", "@plurals/lumen_crash_*")
+require_contains("android/app/proguard-rules.pro", "-keepnames class com.chloemlla.lumen.crash.**")
+require_contains("android/app/src/main/java/com/chloemlla/synapse/mobile/SynapseApplication.kt", ".lumen.crash.fileprovider")
+require_contains("android/app/src/main/java/com/chloemlla/synapse/mobile/SynapseApplication.kt", "crashReportBackendBaseUrl")
+require_contains("android/app/src/main/java/com/chloemlla/synapse/mobile/SynapseApplication.kt", "deviceInstallationIdProvider")
 
 require_contains("android/app/src/legacy/AndroidManifest.xml", "com.synapse.mobile.migration")
 require_contains("android/app/src/legacy/AndroidManifest.xml", "MigrationConfigProvider")

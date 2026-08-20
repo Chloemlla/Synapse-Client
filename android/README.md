@@ -25,11 +25,14 @@ Empty states (first-run login, missing web-login credentials, empty session) use
 
 ## Lumen Crash SDK Integration
 
-Crash reporting and startup ANR protection are provided by the Lumen Crash SDK:
+Crash reporting and startup ANR protection are provided by the Lumen Crash SDK (`com.chloemlla.lumen:lumen-crash` — core collection plus the Compose crash-report UI).
 
-* Dependency: `com.chloemlla.lumen:lumen-crash` (bundle — core collection plus the Compose crash-report UI). The version is never hardcoded: `.github/scripts/fetch-lumen-crash-sdk.py` resolves the latest non-draft `lumen-crash-v*` release in `Chloemlla/Project-Lumen` and stages it to `android/local-maven/`; Gradle resolves the version via the `lumenCrashVersion` gradle property → `LUMEN_CRASH_VERSION` env var → `android/lumen-crash.resolved.version`, in that order.
-* Runtime integration: `SynapseApplication.attachBaseContext` installs the SDK first (idempotent, safe to call from both `attachBaseContext` and `onCreate`); `MainActivity` gates pending reports through `LumenCrashReportScreen`; `CrashBreadcrumbs.record` captures breadcrumbs; the ANR and startup-hang watchdogs run until the host calls `markStartupComplete()` after the first frame.
-* Obfuscation: `app/proguard-rules.pro` ships complete Lumen Crash keep rules (including author-integrity exemptions), so release builds with minify/shrink enabled cold-start without white-screen.
+* **Version is auto-resolved, never hard-pinned.** `.github/scripts/fetch-lumen-crash-sdk.py` picks the newest non-draft `lumen-crash-v*` release in `Chloemlla/Project-Lumen`, stages the AAR/POM into `android/local-maven/`, and writes `android/lumen-crash.resolved.version`. Gradle resolves in this order: `lumenCrashVersion` gradle property → `LUMEN_CRASH_VERSION` env → that file. `settings.gradle.kts` registers the GitHub Packages repo only when `gpr.user`/`gpr.key` (or `GITHUB_ACTOR`/`GITHUB_TOKEN`) are non-blank — empty credentials make GitHub Packages answer 401 and abort resolution even though the locally staged AAR would satisfy it.
+* **A Compose BOM is mandatory.** The SDK publishes Compose UI / Material3 / material-icons-extended / material3-window-size-class as **unversioned** `api` dependencies, so the BOM must be applied before `lumen-crash` — otherwise Gradle fails with empty-version coordinates such as `androidx.compose.ui:ui:.`.
+* **Host touchpoints.** `SynapseApplication` installs the SDK first thing after `super.attachBaseContext` (install is idempotent, so `onCreate` may call it again); `MainActivity` gates pending reports through `LumenCrashReportScreen` before app UI and calls `markStartupComplete()` after the first frame, which is what stops the ANR/startup-hang watchdogs; `CrashBreadcrumbs.record` marks startup paths.
+* **Release minify/shrink.** The AAR's merged `consumer-rules.pro` plus the explicit backup keep block in `app/proguard-rules.pro` (including the author-integrity exemptions) keep release cold start off the white screen; `app/src/main/res/raw/keep.xml` pins `@string/lumen_crash_*` and `@plurals/lumen_crash_*` because `isShrinkResources = true`.
+* **File share** uses the SDK-owned authority `${applicationId}.lumen.crash.fileprovider`, merged from the AAR; the host no longer declares a FileProvider of its own for this.
+* **Report upload.** The SDK's built-in uploader posts to `crashReportBackendBaseUrl` (this app passes its own `BuildConfig.SYNAPSE_API_BASE_URL`) and correlates reports through `deviceInstallationIdProvider`.
 * SDK docs: https://github.com/Chloemlla/Project-Lumen (lumen-crash README).
 
 ## Verification

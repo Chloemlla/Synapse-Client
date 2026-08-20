@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release uses isShrinkResources = true, which would otherwise strip the Lumen crash UI strings. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@string/lumen_crash_*,@plurals/lumen_crash_*" />

@@ -6,6 +6,8 @@ import com.chloemlla.lumen.crash.CrashBreadcrumbs
 import com.chloemlla.lumen.crash.CrashReport
 import com.chloemlla.lumen.crash.LumenCrash
 import com.chloemlla.lumen.crash.LumenCrashConfig
+import com.chloemlla.lumen.crash.LumenCrashDefaults
+import com.chloemlla.synapse.mobile.core.auth.SynapseDeviceId
 import com.chloemlla.synapse.mobile.core.migration.LegacyPackageConfigMigrator
 import com.chloemlla.synapse.mobile.core.notify.SynapseLiveUpdateNotifier
 import com.tencent.mmkv.MMKV
@@ -42,6 +44,12 @@ class SynapseApplication : Application() {
             return
         }
         val appName = runCatching { getString(R.string.app_name) }.getOrDefault("Synapse Mobile")
+        // The SDK rejects non-HTTPS upload targets and this app declares usesCleartextTraffic="false",
+        // so a custom API host is only honoured when it is already HTTPS.
+        val crashBackendBaseUrl = BuildConfig.SYNAPSE_API_BASE_URL
+            .trim()
+            .takeIf { it.startsWith("https://", ignoreCase = true) }
+            ?: LumenCrashDefaults.DEFAULT_CRASH_BACKEND_BASE_URL
         LumenCrash.install(
             this,
             LumenCrashConfig(
@@ -49,7 +57,9 @@ class SynapseApplication : Application() {
                 versionName = BuildConfig.VERSION_NAME,
                 versionCode = BuildConfig.VERSION_CODE,
                 commitHash = BuildConfig.SHORT_HASH,
-                fileProviderAuthority = "${packageName}.fileprovider",
+                // The AAR merges this provider itself with the share + external-cache paths the
+                // SDK needs; the host's own provider cannot serve the external-cache fallback.
+                fileProviderAuthority = "${packageName}.lumen.crash.fileprovider",
                 shareSubject = runCatching { getString(R.string.crash_report_share_subject) }.getOrNull(),
                 reportTitle = runCatching { getString(R.string.crash_report_title) }.getOrNull(),
                 reportMessage = runCatching { getString(R.string.crash_report_message) }.getOrNull(),
@@ -58,6 +68,12 @@ class SynapseApplication : Application() {
                 anrWatchdogCheckIntervalMillis = 1_000L,
                 startupHangWatchdogEnabled = true,
                 startupHangTimeoutMillis = 15_000L,
+                crashReportBackendBaseUrl = crashBackendBaseUrl,
+                deviceInstallationIdProvider = {
+                    // peek() only: this runs on the SDK upload executor, where minting and
+                    // persisting a device id as a side effect of a crash would be wrong.
+                    runCatching { SynapseDeviceId(this@SynapseApplication).peek() }.getOrNull()
+                },
             ),
         )
         lumenCrashAvailable = LumenCrash.isInstalled()

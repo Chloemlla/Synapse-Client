@@ -23,11 +23,6 @@
     protected <methods>;
 }
 
-# FileProvider is referenced directly from the manifest and its XML metadata.
--keep,allowoptimization class androidx.core.content.FileProvider {
-    public <init>();
-}
-
 # WebView JavaScript bridge methods are invoked by source names from Turnstile HTML.
 -keepclassmembers class * {
     @android.webkit.JavascriptInterface <methods>;
@@ -76,6 +71,12 @@
 # Prevents release white-screen / fail-closed author integrity.
 ############################################################
 
+# Keep annotations / signatures used by integrity + public API.
+-keepattributes RuntimeVisibleAnnotations, AnnotationDefault
+# Persisted crash stack traces are unusable without line numbers.
+-keepattributes SourceFile, LineNumberTable
+-renamesourcefileattribute SourceFile
+
 # Required: author attribution + integrity checks
 -keep class com.chloemlla.lumen.crash.CrashAuthorAttribution {
     public static final java.lang.String *;
@@ -94,13 +95,19 @@
 # Required backup: keep public SDK API used by host integration
 -keep class com.chloemlla.lumen.crash.LumenCrash { *; }
 -keep class com.chloemlla.lumen.crash.LumenCrashConfig { *; }
+-keep class com.chloemlla.lumen.crash.LumenCrashConfigBuilder { *; }
+-keep class com.chloemlla.lumen.crash.LumenCrashDefaults { *; }
+-keep class com.chloemlla.lumen.crash.LumenCrashFileProvider { *; }
 -keep class com.chloemlla.lumen.crash.CrashReport { *; }
 -keep class com.chloemlla.lumen.crash.CrashAppInfo { *; }
 -keep class com.chloemlla.lumen.crash.CrashReportStore { *; }
 -keep class com.chloemlla.lumen.crash.CrashBreadcrumbs { *; }
+-keep class com.chloemlla.lumen.crash.CrashReportPasteUploader { *; }
 -keep class com.chloemlla.lumen.crash.ui.LumenCrashReportScreenKt { *; }
+-keep class com.chloemlla.lumen.crash.ui.LumenCrashGateKt { *; }
 
 # Package-level exemption (safe default for third-party hosts)
 -keep class com.chloemlla.lumen.crash.** { *; }
 -keepclassmembers class com.chloemlla.lumen.crash.** { *; }
+-keepnames class com.chloemlla.lumen.crash.**
 -dontwarn com.chloemlla.lumen.crash.**
