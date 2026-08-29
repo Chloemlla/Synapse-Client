@@ -47,6 +47,14 @@
 -dontwarn com.google.mlkit.**
 -dontwarn com.google.android.gms.internal.mlkit_vision_barcode.**
 
+# ML Kit registrars are named only in AndroidManifest meta-data and instantiated with
+# getDeclaredConstructor().newInstance(). Shrinking dropped their no-arg constructors,
+# so discovery skipped every registrar and BarcodeScanning.getClient() dereferenced a
+# null scanner factory.
+-keep class * implements com.google.firebase.components.ComponentRegistrar {
+    <init>();
+}
+
 # OkHttp/Okio are direct networking dependencies and may reference optional platforms.
 -dontwarn okhttp3.**
 -dontwarn okio.**

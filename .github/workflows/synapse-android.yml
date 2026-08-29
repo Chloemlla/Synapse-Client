@@ -135,6 +135,7 @@ jobs:
             android/app/build/reports/tests/**
             android/app/build/reports/lint-results-productionDebug.html
             android/app/build/reports/lint-results-productionDebug.xml
+            android/app/build/outputs/mapping/**
             android/build/reports/problems/**
           retention-days: 14
 
