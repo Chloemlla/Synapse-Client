@@ -50,6 +50,7 @@ import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.outlined.Visibility
@@ -120,9 +121,19 @@ import kotlinx.coroutines.launch
 // Roomier default action padding keeps primary/secondary buttons consistent on mobile.
 private val SynapseButtonContentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SynapseMobileApp(viewModel: SynapseLoginViewModel) {
+    UpdateCenter { center ->
+        SynapseMobileAppScaffold(viewModel, center)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SynapseMobileAppScaffold(
+    viewModel: SynapseLoginViewModel,
+    center: UpdateCenterActions,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val chromeSurface = MaterialTheme.colorScheme.surface
     val context = LocalContext.current
@@ -164,6 +175,16 @@ fun SynapseMobileApp(viewModel: SynapseLoginViewModel) {
                             text = "Synapse Mobile",
                             fontWeight = FontWeight.SemiBold,
                         )
+                    }
+                },
+                actions = {
+                    if (center.updateCheckEnabled) {
+                        IconButton(onClick = center.manualCheck) {
+                            Icon(
+                                imageVector = Icons.Outlined.SystemUpdate,
+                                contentDescription = "检查更新",
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(

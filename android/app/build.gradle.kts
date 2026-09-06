@@ -76,6 +76,14 @@ android {
             "BUILD_TIME",
             "\"${buildConfigString(buildTime)}\"",
         )
+        val buildTimeUtcMillis: Long = providers.environmentVariable("SYNAPSE_BUILD_TIME_UTC_MILLIS")
+            .orNull
+            ?.toLongOrNull()
+            ?.takeIf { it > 0 }
+            ?: 0L
+        buildConfigField("long", "BUILD_TIME_UTC_MILLIS", "${buildTimeUtcMillis}L")
+        // Release CI builds check for updates on GitHub Releases; debug/dev builds never do.
+        buildConfigField("boolean", "UPDATE_CHECK_ENABLED", "true")
         // Used by Android App Links for Linux.do / provider-bind HTTPS callbacks.
         manifestPlaceholders["synapseApiHost"] = synapseApiHost
     }
@@ -92,6 +100,8 @@ android {
             dimension = "distribution"
             applicationId = "com.synapse.mobile"
             buildConfigField("boolean", "IS_LEGACY_PACKAGE", "true")
+            // Legacy package has no GitHub Releases channel of its own; disable self-update.
+            buildConfigField("boolean", "UPDATE_CHECK_ENABLED", "false")
         }
     }
 
@@ -122,6 +132,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+        }
+        debug {
+            buildConfigField("boolean", "UPDATE_CHECK_ENABLED", "false")
         }
     }
 
