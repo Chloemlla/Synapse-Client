@@ -9,16 +9,16 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.json.JSONObject
-import java.time.Instant
 
 /**
  * 首次访问闸门（/api/ip-verification）会拦下所有未豁免的请求，要求同时带上
- * X-Fingerprint 与 X-IP-Verification-Token。浏览器可以用 canvas 指纹加 Turnstile，
- * 安卓客户端两样都没有；这里改用稳定的设备 id 当指纹去换令牌，服务端对一个干净 IP
- * 是直接签发 issuedBy=auto 的令牌的，不需要人机验证。
+ * X-Fingerprint 与 X-IP-Verification-Token。安卓客户端没有 canvas 指纹，也没有
+ * 现成的人机验证入口，只能拿稳定的设备 id 当指纹去换令牌 —— 走的是和浏览器完全
+ * 一样的闸门，服务端该怎么判定还怎么判定（干净 IP 直接签发 auto 令牌，被标记的
+ * IP 依然要求人机验证）。
  *
- * 令牌 40 分钟过期，并且绑定 (指纹, IP)：所以只在本地缓存到过期前 60 秒，
- * IP 变了则由 403 分支再换一次。
+ * 令牌有效期以服务端返回的 expiresAt / tokenTtlMinutes 为准（默认 40 分钟），
+ * 并且绑定 (指纹, IP)：本地只在过期前 60 秒提前换，IP 变了则由 403 分支再换一次。
  */
 internal class SynapseIpVerificationInterceptor(
     baseUrl: String,
@@ -34,6 +34,10 @@ internal class SynapseIpVerificationInterceptor(
 
     @Volatile
     private var cached: CachedToken? = null
+
+    /** 服务端没给令牌（例如 IP 被标记、要人机验证）时的冷却截止时间，避免每个请求都去撞闸门。 */
+    @Volatile
+    private var blockedUntilMillis: Long = 0L
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -85,9 +89,12 @@ internal class SynapseIpVerificationInterceptor(
         synchronized(refreshLock) {
             if (!forceRefresh) {
                 cached?.takeIf { it.isUsableFor(fingerprint) }?.let { return it.token }
+                if (System.currentTimeMillis() < blockedUntilMillis) return null
             }
             val issued = requestToken(fingerprint)
             cached = issued
+            blockedUntilMillis =
+                if (issued == null) System.currentTimeMillis() + RETRY_COOLDOWN_MILLIS else 0L
             return issued?.token
         }
     }
@@ -105,16 +112,19 @@ internal class SynapseIpVerificationInterceptor(
                 if (!response.isSuccessful) return null
                 val json = JSONObject(response.body?.string().orEmpty())
                 val token = json.optString("token").takeIf { it.isNotBlank() } ?: return null
-                CachedToken(token, fingerprint, resolveExpiry(json.optString("expiresAt")))
+                CachedToken(token, fingerprint, resolveExpiryMillis(json))
             }
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun resolveExpiry(rawExpiresAt: String): Long =
-        runCatching { Instant.parse(rawExpiresAt).toEpochMilli() }
-            .getOrElse { System.currentTimeMillis() + FALLBACK_TTL_MILLIS }
+    /** 有效期一律听服务端的：优先 expiresAt，其次 tokenTtlMinutes，都没有才退回默认 TTL。 */
+    private fun resolveExpiryMillis(json: JSONObject): Long {
+        SynapseTokenExpiry.parseInstant(json.optString("expiresAt"))?.let { return it.toEpochMilli() }
+        val ttlMinutes = json.optInt("tokenTtlMinutes", 0).takeIf { it > 0 } ?: DEFAULT_TTL_MINUTES
+        return System.currentTimeMillis() + ttlMinutes * 60_000L
+    }
 
     private class CachedToken(
         val token: String,
@@ -131,7 +141,8 @@ internal class SynapseIpVerificationInterceptor(
         const val ERROR_CODE = "IP_VERIFICATION_REQUIRED"
         const val HTTP_FORBIDDEN = 403
         const val REFRESH_SKEW_MILLIS = 60_000L
-        const val FALLBACK_TTL_MILLIS = 30 * 60 * 1000L
+        const val RETRY_COOLDOWN_MILLIS = 5 * 60 * 1000L
+        const val DEFAULT_TTL_MINUTES = 40
         const val PEEK_LIMIT = 4L * 1024
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
