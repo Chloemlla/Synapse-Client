@@ -404,8 +404,8 @@ class SynapseMobileLoginApi(
         return JSONObject(this)
     }
 
-    private companion object {
-        private const val USER_AGENT = "Synapse-Mobile-Android"
+    internal companion object {
+        internal const val USER_AGENT = "Synapse-Mobile-Android"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 }

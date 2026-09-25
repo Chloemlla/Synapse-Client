@@ -3,7 +3,9 @@ package com.chloemlla.synapse.mobile.core.auth
 import android.net.Uri
 import android.content.Context
 import android.os.Build
+import okhttp3.OkHttpClient
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 
 class SynapseAuthRepository(
     context: Context,
@@ -11,6 +13,7 @@ class SynapseAuthRepository(
 ) {
     private val credentialStore = SynapseCredentialStore(context)
     private val deviceId = SynapseDeviceId(context)
+    private val apiClients = ConcurrentHashMap<String, OkHttpClient>()
     private val trustedApiOrigin = SynapseApiOriginPolicy.normalizeHttpsOrigin(defaultBaseUrl)
 
     fun credentials(): StoredSynapseCredentials = credentialStore.load()
@@ -446,12 +449,20 @@ class SynapseAuthRepository(
         credentialStore.clearCurrentAccount()
     }
 
-    private fun apiFor(baseUrl: String): SynapseMobileLoginApi =
-        SynapseMobileLoginApi(
-            baseUrl = SynapseApiOriginPolicy.normalizeHttpsOrigin(baseUrl),
-            httpClient = SynapseSecureOkHttpFactory.create(
-                baseUrl = SynapseApiOriginPolicy.normalizeHttpsOrigin(baseUrl),
-            ),
+    private fun apiFor(baseUrl: String): SynapseMobileLoginApi {
+        val origin = SynapseApiOriginPolicy.normalizeHttpsOrigin(baseUrl)
+        return SynapseMobileLoginApi(
+            baseUrl = origin,
+            // 按 origin 复用客户端：首次访问令牌的缓存挂在拦截器实例上，每个请求都新建
+            // OkHttpClient 会让缓存永远失效，退化成每次调用先换一次令牌。
+            httpClient = apiClients.computeIfAbsent(origin) {
+                SynapseSecureOkHttpFactory.create(
+                    baseUrl = origin,
+                    // 首次访问闸门要求 X-Fingerprint + X-IP-Verification-Token；安卓上没有
+                    // canvas 指纹，用设备 id 当指纹换取令牌，见 SynapseIpVerificationInterceptor。
+                    ipVerificationFingerprint = { deviceId.getOrCreate() },
+                )
+            },
             clientMetadata = {
                 mapOf(
                     "X-Client-Name" to "Synapse-Client",
@@ -461,6 +472,7 @@ class SynapseAuthRepository(
                 )
             },
         )
+    }
 
     private suspend fun authenticatedJwt(): String {
         require(!credentialStore.revokeExpiredClientTokens()) {
