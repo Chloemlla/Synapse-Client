@@ -2,7 +2,7 @@
 
 Android Kotlin client for **Synapse mobile login** — password login, optional second-factor (TOTP / Passkey), encrypted on-device sessions, and QR / deep-link confirmation for web login.
 
-API base (default): [https://tts.chloemlla.com](https://tts.chloemlla.com)
+API base (default): [https://chloemlla.com](https://chloemlla.com)
 
 ## What this project does
 
@@ -153,4 +153,4 @@ This project is licensed under the [GNU General Public License v3.0](LICENSE).
 
 - Integration spec: [`docs/android-mobile-login-integration.md`](docs/android-mobile-login-integration.md)
 - Android module notes: [`android/README.md`](android/README.md)
-- Default API site: [https://tts.chloemlla.com](https://tts.chloemlla.com)
+- Default API site: [https://chloemlla.com](https://chloemlla.com)

@@ -1,7 +1,7 @@
 # Android Mobile Login Integration
 
 本文档用于安卓客户端对接 Synapse 登录系统的扫码登录和客户端登录令牌能力。后端接口均挂载在同一站点 API 下，示例路径以 `/api/auth/mobile-login` 开头。
-API 地址：https://tts.chloemlla.com
+API 地址：https://chloemlla.com
 ## 登录能力
 
 安卓端需要支持两类登录凭证：
@@ -128,7 +128,7 @@ API 地址：https://tts.chloemlla.com
 ```json
 {
   "username": "string",
-  "clientOrigin": "https://tts.chloemlla.com"
+  "clientOrigin": "https://chloemlla.com"
 }
 ```
 
@@ -167,7 +167,7 @@ API 地址：https://tts.chloemlla.com
     "type": "public-key",
     "response": {}
   },
-  "clientOrigin": "https://tts.chloemlla.com"
+  "clientOrigin": "https://chloemlla.com"
 }
 ```
 
@@ -195,7 +195,7 @@ API 地址：https://tts.chloemlla.com
 
 ```json
 {
-  "clientOrigin": "https://tts.chloemlla.com"
+  "clientOrigin": "https://chloemlla.com"
 }
 ```
 
@@ -229,7 +229,7 @@ Discoverable 模式通常不带 `allowCredentials`，由 Credential Manager 发�
     "response": {}
   },
   "challenge": "string",
-  "clientOrigin": "https://tts.chloemlla.com"
+  "clientOrigin": "https://chloemlla.com"
 }
 ```
 
@@ -248,7 +248,7 @@ synapse://mobile-login?sessionId=<sessionId>&scanToken=<scanToken>&apiBaseUrl=<a
 
 - `sessionId`：扫码登录会话 ID。
 - `scanToken`：安卓端确认扫码会话时必须提交的一次性证明。
-- `apiBaseUrl`：当前 Web 所在后端 API Origin，例如 `https://tts.chloemlla.com`。
+- `apiBaseUrl`：当前 Web 所在后端 API Origin，例如 `https://chloemlla.com`。
 - `expiresAt`：二维码过期时间。当前有效期为 3 分钟。
 
 安卓端扫描后应校验 scheme 为 `synapse://mobile-login`，再展示账号、设备和目标站点确认页。
@@ -376,7 +376,7 @@ synapse://mobile-login?sessionId=<sessionId>&scanToken=<scanToken>&apiBaseUrl=<a
    - `https://{api-host}/auth/linuxdo/callback*`
    - `https://{api-host}/auth/provider/bind*`
    - `android:autoVerify="true"`
-   - `{api-host}` 来自 `SYNAPSE_API_BASE_URL`（默认 `tts.chloemlla.com`）
+   - `{api-host}` 来自 `SYNAPSE_API_BASE_URL`（默认 `chloemlla.com`）
 2. **站点发布 Digital Asset Links**：
    - URL：`https://{api-host}/.well-known/assetlinks.json`
    - 必须包含生产包名 `com.chloemlla.synapse.mobile`（推荐同时保留过渡期旧包 `com.synapse.mobile`）与 **发布签名证书 SHA-256**
@@ -392,7 +392,7 @@ synapse://mobile-login?sessionId=<sessionId>&scanToken=<scanToken>&apiBaseUrl=<a
 **注意**：仅改 App 不能生效；`assetlinks.json` 必须由 Happy-TTS / CDN 在 API 同源主机上可公开访问。校验可用：
 
 ```text
-https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://tts.chloemlla.com&relation=delegate_permission/common.handle_all_urls
+https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://chloemlla.com&relation=delegate_permission/common.handle_all_urls
 ```
 
 ### Linux.do 配置
@@ -405,8 +405,8 @@ https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=http
 {
   "enabled": true,
   "clientIdConfigured": true,
-  "callbackUrl": "https://tts.chloemlla.com/api/auth/linuxdo/callback",
-  "frontendCallbackUrl": "https://tts.chloemlla.com/auth/linuxdo/callback",
+  "callbackUrl": "https://chloemlla.com/api/auth/linuxdo/callback",
+  "frontendCallbackUrl": "https://chloemlla.com/auth/linuxdo/callback",
   "discoveryUrl": "https://connect.linux.do/.well-known/openid-configuration",
   "scopes": "openid profile email"
 }
