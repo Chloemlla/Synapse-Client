@@ -44,10 +44,10 @@ android {
             ?.takeIf { it.isNotBlank() }
             ?: "1.0.0"
 
-        val synapseApiBaseUrl = providerString("SYNAPSE_API_BASE_URL", "https://tts.chloemlla.com")
+        val synapseApiBaseUrl = providerString("SYNAPSE_API_BASE_URL", "https://chloemlla.com")
         val synapseApiHost = runCatching {
             URI(synapseApiBaseUrl).host
-        }.getOrNull()?.takeIf { it.isNotBlank() } ?: "tts.chloemlla.com"
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: "chloemlla.com"
 
         buildConfigField(
             "String",

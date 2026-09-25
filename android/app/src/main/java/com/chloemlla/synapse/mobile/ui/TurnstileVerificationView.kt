@@ -351,4 +351,4 @@ private fun buildTurnstileHtml(siteKey: String, theme: String): String {
 }
 
 private const val TURNSTILE_BRIDGE_NAME = "SynapseTurnstile"
-private const val DEFAULT_TURNSTILE_BASE_URL = "https://tts.chloemlla.com"
+private const val DEFAULT_TURNSTILE_BASE_URL = "https://chloemlla.com"
