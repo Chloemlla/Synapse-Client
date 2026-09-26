@@ -125,6 +125,46 @@ class JsonMappingsTest {
     }
 
     @Test
+    fun clientTokenRotationMapsServerSchedule() {
+        val result = JSONObject(
+            """
+            {
+              "success": true,
+              "rotated": true,
+              "clientLoginToken": "sml_next_value",
+              "expiresAt": "2026-12-25T00:00:00Z",
+              "rotatedAt": "2026-09-26T00:00:00Z",
+              "nextRotationAt": "2026-09-27T00:00:00Z",
+              "rotationIndex": 7
+            }
+            """.trimIndent(),
+        ).toClientTokenRotationResult()
+
+        assertTrue(result.success)
+        assertEquals("sml_next_value", result.clientLoginToken)
+        assertEquals("2026-12-25T00:00:00Z", result.expiresAt)
+        assertEquals("2026-09-27T00:00:00Z", result.nextRotationAt)
+        assertEquals(7, result.rotationIndex)
+    }
+
+    @Test
+    fun clientTokenRotationToleratesLegacyServerWithoutSchedule() {
+        val result = JSONObject(
+            """
+            {
+              "success": true,
+              "clientLoginToken": "sml_next_value",
+              "expiresAt": "2026-12-25T00:00:00Z"
+            }
+            """.trimIndent(),
+        ).toClientTokenRotationResult()
+
+        assertEquals(null, result.nextRotationAt)
+        assertEquals(null, result.rotatedAt)
+        assertEquals(0, result.rotationIndex)
+    }
+
+    @Test
     fun totpVerificationMapsJwtToken() {
         val result = JSONObject(
             """

@@ -59,6 +59,19 @@ data class ClientTokenIssueResult(
     val expiresAt: String,
 )
 
+/**
+ * 令牌轮换响应。时间参数一律听服务端：`nextRotationAt` 就是下一次该动手的时间，
+ * 客户端不自己算节奏。
+ */
+data class ClientTokenRotationResult(
+    val success: Boolean,
+    val clientLoginToken: String,
+    val expiresAt: String,
+    val rotatedAt: String?,
+    val nextRotationAt: String?,
+    val rotationIndex: Int,
+)
+
 data class JwtExchangeResult(
     val success: Boolean,
     val token: String,
@@ -109,6 +122,12 @@ data class StoredSynapseAccount(
     val userId: String?,
     val username: String?,
     val email: String?,
+    /** 服务端下发的下一次轮换时间（也是退避后的重试时间）。 */
+    val clientLoginTokenNextRotationAt: String? = null,
+    /** 本代令牌的产生时间。 */
+    val clientLoginTokenRotatedAt: String? = null,
+    /** 第几代，服务端给的。 */
+    val clientLoginTokenRotationIndex: Int = 0,
 ) {
     val displayName: String = username ?: email ?: userId ?: accountId
     val hasJwt: Boolean = !jwt.isNullOrBlank()
@@ -127,6 +146,9 @@ data class StoredSynapseCredentials(
     val email: String?,
     val activeAccountId: String?,
     val accounts: List<StoredSynapseAccount>,
+    val clientLoginTokenNextRotationAt: String? = null,
+    val clientLoginTokenRotatedAt: String? = null,
+    val clientLoginTokenRotationIndex: Int = 0,
 ) {
     val hasJwt: Boolean = !jwt.isNullOrBlank()
     val hasClientLoginToken: Boolean = !clientLoginToken.isNullOrBlank()

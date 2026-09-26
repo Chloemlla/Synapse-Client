@@ -212,6 +212,19 @@ class SynapseMobileLoginApi(
                 .put("deviceName", deviceName),
         ) { it.toClientTokenIssueResult() }
 
+    suspend fun rotateClientToken(
+        clientLoginToken: String,
+        deviceId: String,
+        reason: String,
+    ): ClientTokenRotationResult =
+        post(
+            path = "/api/auth/mobile-login/client-token/rotate",
+            body = JSONObject()
+                .put("clientLoginToken", clientLoginToken)
+                .put("deviceId", deviceId)
+                .put("reason", reason),
+        ) { it.toClientTokenRotationResult() }
+
     suspend fun exchangeClientToken(clientLoginToken: String, deviceId: String): JwtExchangeResult =
         post(
             path = "/api/auth/mobile-login/client-token/exchange",

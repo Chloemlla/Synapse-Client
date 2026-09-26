@@ -626,6 +626,51 @@ Content-Type: application/json
 
 安卓端启动时可先兑换客户端令牌，成功后使用返回的标准 JWT 调用业务 API。
 
+### 客户端登录令牌轮换
+
+```http
+POST /api/auth/mobile-login/client-token/rotate
+Content-Type: application/json
+```
+
+```json
+{
+  "clientLoginToken": "sml_...",
+  "deviceId": "android-device-stable-id",
+  "reason": "scheduled"
+}
+```
+
+响应：
+
+```json
+{
+  "success": true,
+  "rotated": true,
+  "clientLoginToken": "sml_new...",
+  "expiresAt": "2026-12-25T00:00:00Z",
+  "rotatedAt": "2026-09-26T00:00:00Z",
+  "nextRotationAt": "2026-09-27T00:00:00Z",
+  "rotationIndex": 7,
+  "rotateIntervalMs": 86400000,
+  "graceMs": 300000
+}
+```
+
+要点：
+
+1. 不要求 JWT：持有当前有效令牌就是凭证。`deviceId` 必须与令牌绑定一致，否则 403。
+2. `reason` 只用于日志归因（`scheduled` / `manual`），**手动不放宽任何阈值**；节流、每日配额、旧令牌复用判定全在服务端。
+3. 轮换不影响登录状态：已签发的 JWT 会话不会因轮换被撤销，新令牌自己建会话；旧令牌在 `graceMs`（5 分钟）内仍可用于在途请求。
+4. **被顶替的旧令牌超过宽限期再次使用 = 泄露信号**，服务端会吊销整条血缘（含当前在用的新一代）并返回 `401`，
+   `errorCode` 为 `MOBILE_TOKEN_REUSED`；此时客户端必须清除本机 JWT 与 `sml_` 令牌并提示重新登录，**不得自动重试**。
+5. 节奏完全听 `nextRotationAt`；收到 `429`（`MOBILE_TOKEN_ROTATION_THROTTLED` / `MOBILE_TOKEN_ROTATION_QUOTA`）时按本地退避时延后重试，不弹错误。
+6. 服务端未部署本接口时（旧后端 404），客户端保持旧令牌不变，按退避时间重试即可，不影响登录。
+
+策略正文见服务端仓库 `docs/mobile-token-risk-control.md`；客户端实现见
+`core/auth/SynapseClientTokenRotation.kt`（到期判定与退避）、`core/auth/SynapseAuthRepository.kt`
+（单飞轮换）、`ui/SynapseLoginViewModel.kt`（启动自动补轮换 + 手动入口）。
+
 ### 撤销客户端登录令牌
 
 ```http

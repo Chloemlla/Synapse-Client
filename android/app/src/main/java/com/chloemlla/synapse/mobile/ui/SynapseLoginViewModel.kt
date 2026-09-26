@@ -5,6 +5,7 @@ import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.chloemlla.synapse.mobile.core.auth.ClientTokenRotationOutcome
 import com.chloemlla.synapse.mobile.core.auth.LoginOutcome
 import com.chloemlla.synapse.mobile.core.auth.GoogleAuthConfig
 import com.chloemlla.synapse.mobile.core.auth.PasskeyAuthenticationOptions
@@ -56,6 +57,39 @@ class SynapseLoginViewModel(
         }
         loadTurnstileConfig()
         loadAuthProvidersPublicConfig()
+        rotateClientTokenOnLaunch()
+    }
+
+    /**
+     * 启动后补一次到期轮换。只有“本机登录态已失效”才需要告诉用户；
+     * 节流和网络失败已经被仓储排成退避时间，不在这里报。
+     */
+    private fun rotateClientTokenOnLaunch() {
+        viewModelScope.launch {
+            val outcome = runCatching { repository.ensureClientTokenRotation() }.getOrNull()
+            if (outcome == ClientTokenRotationOutcome.RequiresSignIn) {
+                mutableState.update {
+                    it.copy(
+                        credentials = repository.credentials(),
+                        status = "登录状态已失效，请重新登录。",
+                    )
+                }
+            }
+        }
+    }
+
+    /** 用户手动请求更新登录令牌。 */
+    fun rotateClientLoginToken() {
+        launchAction {
+            when (repository.rotateClientTokenNow()) {
+                ClientTokenRotationOutcome.Rotated -> "登录令牌已更新"
+                ClientTokenRotationOutcome.NotScheduled -> "登录令牌已是最新"
+                ClientTokenRotationOutcome.Deferred -> "暂时无法更新登录令牌，稍后会自动重试"
+                ClientTokenRotationOutcome.NoAccount -> "当前没有可更新的登录令牌"
+                ClientTokenRotationOutcome.RequiresSignIn ->
+                    throw IllegalStateException("登录状态已失效，请重新登录。")
+            }
+        }
     }
 
     fun selectTab(tab: SynapseTab) {

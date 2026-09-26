@@ -63,6 +63,16 @@ internal fun JSONObject.toClientTokenIssueResult(): ClientTokenIssueResult =
         expiresAt = optString("expiresAt"),
     )
 
+internal fun JSONObject.toClientTokenRotationResult(): ClientTokenRotationResult =
+    ClientTokenRotationResult(
+        success = optBoolean("success"),
+        clientLoginToken = optString("clientLoginToken"),
+        expiresAt = optString("expiresAt"),
+        rotatedAt = optString("rotatedAt").takeIf { it.isNotBlank() },
+        nextRotationAt = optString("nextRotationAt").takeIf { it.isNotBlank() },
+        rotationIndex = optInt("rotationIndex"),
+    )
+
 internal fun JSONObject.toJwtExchangeResult(): JwtExchangeResult =
     JwtExchangeResult(
         success = optBoolean("success"),

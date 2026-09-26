@@ -1440,6 +1440,7 @@ private fun SessionPanel(
 ) {
     var showRevokeConfirmation by rememberSaveable { mutableStateOf(false) }
     var showClearConfirmation by rememberSaveable { mutableStateOf(false) }
+    var showTokenRotationConfirmation by rememberSaveable { mutableStateOf(false) }
     var pendingSessionRevoke by remember { mutableStateOf<SynapseSessionRevokeTarget?>(null) }
 
     LaunchedEffect(state.credentials.activeAccountId, state.selectedTab) {
@@ -1472,7 +1473,7 @@ private fun SessionPanel(
 
         SectionCard(
             title = "会话操作",
-            subtitle = "静默登录与令牌撤销。",
+            subtitle = "静默登录、更新与撤销令牌。",
             icon = Icons.Outlined.Devices,
             emphasized = true,
         ) {
@@ -1493,6 +1494,14 @@ private fun SessionPanel(
                 } else {
                     ButtonLabel(Icons.AutoMirrored.Outlined.Login, "自动登录本客户端")
                 }
+            }
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.loading && state.hasCurrentClientLoginToken,
+                contentPadding = SynapseButtonContentPadding,
+                onClick = { showTokenRotationConfirmation = true },
+            ) {
+                ButtonLabel(Icons.Outlined.Refresh, "更新登录令牌")
             }
             OutlinedButton(
                 modifier = Modifier.fillMaxWidth(),
@@ -1526,6 +1535,21 @@ private fun SessionPanel(
             }
         }
         OssCreditsFooter()
+    }
+
+    if (showTokenRotationConfirmation) {
+        ConfirmActionDialog(
+            title = "更新登录令牌",
+            message = "更新后本机改用一个新令牌，旧令牌几分钟后不再可用；登录状态不会中断。",
+            confirmText = "更新",
+            onConfirm = {
+                showTokenRotationConfirmation = false
+                viewModel.rotateClientLoginToken()
+            },
+            onDismiss = { showTokenRotationConfirmation = false },
+            confirmIcon = Icons.Outlined.Refresh,
+            destructive = false,
+        )
     }
 
     if (showRevokeConfirmation) {
@@ -1818,7 +1842,11 @@ private fun CredentialSummary(
                 label = "SML 过期时间",
                 value = SynapseTokenExpiry.formatDisplay(active.clientLoginTokenExpiresAt) ?: "未保存",
             )
-            // 只有过期或缺令牌时才需要给一句话；有有效令牌时不再解释有效期来源。
+            CopyableLine(
+                label = "下次更新令牌",
+                value = SynapseTokenExpiry.formatDisplay(active.clientLoginTokenNextRotationAt) ?: "待同步",
+            )
+            // 只有过期或缺令牌时才需要提醒；令牌有效时不再解释有效期来源。
             val tokenNotice = when {
                 active.clientLoginToken == null && active.clientLoginTokenExpiresAt != null ->
                     "登录已过期，请重新登录。"

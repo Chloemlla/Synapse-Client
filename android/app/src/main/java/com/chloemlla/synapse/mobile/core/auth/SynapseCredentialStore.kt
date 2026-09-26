@@ -56,6 +56,20 @@ class SynapseCredentialStore(context: Context) {
     }
 
     fun saveClientLoginToken(clientLoginToken: String, expiresAt: String?) {
+        saveClientLoginToken(
+            ClientTokenRotationResult(
+                success = true,
+                clientLoginToken = clientLoginToken,
+                expiresAt = expiresAt.orEmpty(),
+                rotatedAt = null,
+                nextRotationAt = null,
+                rotationIndex = 0,
+            ),
+        )
+    }
+
+    /** 轮换或重新签发后，整体覆盖当前账号的令牌与其节奏字段。 */
+    fun saveClientLoginToken(rotation: ClientTokenRotationResult) {
         val accounts = loadAccounts().toMutableList()
         val accountId = currentAccountId(accounts) ?: MANUAL_ACCOUNT_ID
         val existing = accounts.firstOrNull { it.accountId == accountId }
@@ -64,15 +78,32 @@ class SynapseCredentialStore(context: Context) {
             StoredSynapseAccount(
                 accountId = accountId,
                 jwt = existing?.jwt,
-                clientLoginToken = clientLoginToken,
-                clientLoginTokenExpiresAt = expiresAt ?: existing?.clientLoginTokenExpiresAt,
+                clientLoginToken = rotation.clientLoginToken,
+                clientLoginTokenExpiresAt = rotation.expiresAt.takeIf { it.isNotBlank() }
+                    ?: existing?.clientLoginTokenExpiresAt,
                 userId = existing?.userId,
                 username = existing?.username,
                 email = existing?.email,
+                clientLoginTokenNextRotationAt = rotation.nextRotationAt,
+                clientLoginTokenRotatedAt = rotation.rotatedAt,
+                clientLoginTokenRotationIndex = rotation.rotationIndex,
             ),
         )
         saveAccounts(accounts, accountId)
         writeLegacyActive(load().activeAccount)
+    }
+
+    /**
+     * 改写下一次轮换时间：节流或网络失败时用本地退避，别每次启动都去碰服务端的 429。
+     */
+    fun scheduleClientTokenRotation(nextRotationAt: String?) {
+        val accounts = loadAccounts().toMutableList()
+        val active = activeAccount(accounts) ?: return
+        if (!active.hasClientLoginToken) return
+        val next = active.copy(clientLoginTokenNextRotationAt = nextRotationAt)
+        upsertAccount(accounts, next)
+        saveAccounts(accounts, next.accountId)
+        writeLegacyActive(next)
     }
 
     fun saveUser(user: SynapseUser) {
@@ -90,6 +121,9 @@ class SynapseCredentialStore(context: Context) {
                 userId = user.id,
                 username = user.username,
                 email = user.email,
+                clientLoginTokenNextRotationAt = existing?.clientLoginTokenNextRotationAt,
+                clientLoginTokenRotatedAt = existing?.clientLoginTokenRotatedAt,
+                clientLoginTokenRotationIndex = existing?.clientLoginTokenRotationIndex ?: 0,
             ),
         )
         removePromotedManualAccount(accounts, activeBeforeSave, accountId)
@@ -110,6 +144,9 @@ class SynapseCredentialStore(context: Context) {
             email = active?.email,
             activeAccountId = active?.accountId,
             accounts = accounts,
+            clientLoginTokenNextRotationAt = active?.clientLoginTokenNextRotationAt,
+            clientLoginTokenRotatedAt = active?.clientLoginTokenRotatedAt,
+            clientLoginTokenRotationIndex = active?.clientLoginTokenRotationIndex ?: 0,
         )
     }
 

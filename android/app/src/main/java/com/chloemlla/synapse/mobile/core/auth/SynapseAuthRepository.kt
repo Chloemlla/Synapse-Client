@@ -3,8 +3,11 @@ package com.chloemlla.synapse.mobile.core.auth
 import android.net.Uri
 import android.content.Context
 import android.os.Build
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import org.json.JSONObject
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
 class SynapseAuthRepository(
@@ -35,6 +38,58 @@ class SynapseAuthRepository(
     fun deviceId(): String = deviceId.getOrCreate()
 
     fun apiOrigin(): String = trustedApiOrigin
+
+    private val rotationMutex = Mutex()
+
+    /**
+     * 到期就轮换一张 sml_ 登录令牌；没到期什么都不做。
+     * App 启动和静默登录后各在后台跑一次，不向界面发噪音。
+     */
+    suspend fun ensureClientTokenRotation(): ClientTokenRotationOutcome =
+        rotationMutex.withLock { rotateClientToken(reason = "scheduled", respectSchedule = true) }
+
+    /**
+     * 用户手动请求轮换：不看本地时间表，节流、配额与旧令牌复用判定全部由服务端说。
+     */
+    suspend fun rotateClientTokenNow(): ClientTokenRotationOutcome =
+        rotationMutex.withLock { rotateClientToken(reason = "manual", respectSchedule = false) }
+
+    private suspend fun rotateClientToken(reason: String, respectSchedule: Boolean): ClientTokenRotationOutcome {
+        val account = credentialStore.load().activeAccount
+        val clientToken = account?.clientLoginToken
+        if (clientToken.isNullOrBlank()) return ClientTokenRotationOutcome.NoAccount
+        if (respectSchedule && !SynapseClientTokenRotation.isDue(account.clientLoginTokenNextRotationAt)) {
+            return ClientTokenRotationOutcome.NotScheduled
+        }
+
+        val result = try {
+            apiFor(trustedApiOrigin).rotateClientToken(
+                clientLoginToken = clientToken,
+                deviceId = deviceId.getOrCreate(),
+                reason = reason,
+            )
+        } catch (error: SynapseApiException) {
+            // 401 / 403 意味着这张令牌（或它的会话）本身已经不能用了，重试没有意义。
+            val retryAt = SynapseClientTokenRotation.retryAt(error.statusCode)
+            if (retryAt == null) {
+                credentialStore.clearCurrentAccount()
+                return ClientTokenRotationOutcome.RequiresSignIn
+            }
+            credentialStore.scheduleClientTokenRotation(retryAt.toString())
+            return ClientTokenRotationOutcome.Deferred
+        } catch (error: IOException) {
+            // 没拿到响应：旧令牌仍然有效，不改凭据，按退避时间再试。
+            credentialStore.scheduleClientTokenRotation(SynapseClientTokenRotation.retryAt(null)?.toString())
+            return ClientTokenRotationOutcome.Deferred
+        }
+
+        if (result.clientLoginToken.isBlank()) {
+            credentialStore.scheduleClientTokenRotation(SynapseClientTokenRotation.retryAt(null)?.toString())
+            return ClientTokenRotationOutcome.Deferred
+        }
+        credentialStore.saveClientLoginToken(result)
+        return ClientTokenRotationOutcome.Rotated
+    }
 
     fun parseOAuthAuthorizationRequest(raw: String): SynapseOAuthAuthorizationRequest =
         SynapseOAuthRequestParser.parse(raw, trustedApiOrigin)
@@ -385,16 +440,21 @@ class SynapseAuthRepository(
         val clientToken = stored.clientLoginToken
             ?: throw IllegalStateException("No client login token is stored on this device.")
 
-        return try {
+        val result = try {
             apiFor(trustedApiOrigin)
                 .exchangeClientToken(clientToken, deviceId.getOrCreate())
-                .also { result ->
-                    credentialStore.saveJwt(result.token, result.user)
+                .also { exchange ->
+                    credentialStore.saveJwt(exchange.token, exchange.user)
                 }
         } catch (error: SynapseApiException) {
             if (error.statusCode == 401) credentialStore.clearCurrentAccount()
             throw error
         }
+
+        // 静默登录说明这台设备还在用；顺手做一次到期检查。结果不向上抛，
+        // 失败已经按退避时间排好了，下一轮再试。
+        runCatching { ensureClientTokenRotation() }
+        return result
     }
 
     suspend fun parseAndMarkScanned(rawPayload: String): MobileLoginStatus {
