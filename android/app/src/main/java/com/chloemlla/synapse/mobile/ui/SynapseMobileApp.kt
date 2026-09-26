@@ -1806,7 +1806,8 @@ private fun CredentialSummary(
             CopyableLine(
                 label = "SML 登录令牌",
                 value = active.clientLoginTokenPreview ?: "未保存",
-                copyValue = "",
+                // 界面只渲染预览串，复制到剪贴板的是完整令牌（协议文档允许本机 sml_ 令牌展示并复制）。
+                copyValue = active.clientLoginToken.orEmpty(),
             )
             CopyableLine(
                 label = "SML 过期时间",

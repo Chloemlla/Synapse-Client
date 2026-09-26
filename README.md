@@ -140,7 +140,9 @@ Repository policy: prefer CI for full Gradle verification when agent or constrai
 
 - Network: HTTPS only; cleartext traffic disabled in the app manifest / network security config.
 - Storage: client credentials use encrypted app-private storage (not plain SharedPreferences for secrets).
-- UI: secrets are shown as previews or status only; full values are not rendered.
+- UI: secrets are shown as previews or status only; full values are not rendered. The local authorization
+  page can copy the current account's `sml_` client login token to the clipboard (screen stays masked);
+  JWT, passwords and QR `scanToken` are never displayed or copyable.
 - Release: R8/ProGuard minification and resource shrinking are used for release builds (see Android release obfuscation guidelines in `.trellis/spec/android/` when contributing).
 
 **Do not commit** keystores, private keys, or files such as `keystore_base64.txt` with real secrets. Use repository secrets for CI signing when publishing releases.
