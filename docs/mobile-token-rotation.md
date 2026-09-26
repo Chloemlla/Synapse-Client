@@ -31,6 +31,10 @@ POST /api/auth/mobile-login/integrity-challenge
 `nonce` 一次性且绑定申请它的账号与设备；换来的令牌随轮换/签发请求以 `integrityNonce` +
 `integrityToken` 回传。响应里的 `requiresVerification` 是服务端对**本代**的降级判定。
 
+响应里还有一个 `escalated`，是服务端对**这一代**的风险分级标记：`true` 只意味着这次给回来的
+`nextRotationAt` 比平时近。客户端**不需要为它做任何事**，照旧只认服务端下发的时间；也不要拿它去
+推断风险或提示用户"账号异常"（服务端策略见 `mobile-token-risk-control.md` §5）。
+
 ## 实现分布
 
 | 位置 | 职责 |

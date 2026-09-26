@@ -660,7 +660,8 @@ Content-Type: application/json
   "rotationIndex": 7,
   "rotateIntervalMs": 86400000,
   "graceMs": 300000,
-  "requiresVerification": false
+  "requiresVerification": false,
+  "escalated": false
 }
 ```
 
@@ -676,6 +677,9 @@ Content-Type: application/json
 7. `requiresVerification: true` 表示服务端把这一代判成了**降级**（有效期缩短、`nextRotationAt` 提前），
    **不是错误**：令牌照常可用，客户端只需把标记存下来，界面提示一句，下一次校验通过会自然清掉。
    轮换与签发（`/client-token/issue`）的响应里都可能出现这个字段。
+8. `escalated: true`（**只在轮换响应里出现**）表示服务端判定这一代需要更密的节奏，已经把 `nextRotationAt`
+   提前了。它**不需要客户端做任何事**：照旧只认 `nextRotationAt`，不要据此判断风险，也不要提示用户
+   "账号异常"。首次签发（`/client-token/issue`）没有这个字段。
 
 ### 设备证明（Play Integrity）
 
