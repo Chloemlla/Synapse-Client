@@ -61,6 +61,18 @@ Google 登录需要重新验证账号。请前往系统设置 → Google → 管
 
 ## 验证
 
-本地禁止构建（性能不足），全部由 GitHub Actions `Build Synapse Android` 编译 + 单元测试裁决。
-`SynapseCredentialErrorMapperTest` 现有断言（`重新验证`、`已取消`、`未完成：provider interrupted`、
-`shouldRetryAfterCancellation` 四例）与新措辞保持兼容。
+本地禁止构建（性能不足），全部由 GitHub Actions `Build Synapse Android` 编译 + 单元测试裁决：
+
+- 提交 `9f6bbaa`（签名 `git log -1 --format=%G?` = `G`），run `36210956626` = `completed / success`
+  （job `Build signed release APK` 同样 success）
+- 产物 release：`v1.0.97-9f6bbaa8`（含 universal / arm64-v8a / armeabi-v7a / x86 / x86_64 APK
+  与 `release-manifest.json`，应用内自更新可直接拿到）
+- `SynapseCredentialErrorMapperTest` 未改断言即可通过：新措辞仍含“重新验证”、不含“已取消”，
+  `cancellationSummary` 的其它两个分支与 `shouldRetryAfterCancellation` 四例语义未动。
+
+## 实机回归点（需要装 v1.0.97+ 验证）
+
+1. 多 Google 账号的设备上点「使用 Google 账号登录」：应能看到账号选择窗口（底部弹窗或系统窗口）。
+2. 故意取消一次：应该只得到“已取消 Google 登录。”，不自动重弹。
+3. 服务端 Web Client ID / 签名 SHA-1 不匹配时：会得到 `DEVELOPER_ERROR(10)` 对应的
+   “Google 登录未正确配置，请联系站点管理员检查 Web Client ID”，而不是让人去删账号。

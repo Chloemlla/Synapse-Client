@@ -79,17 +79,36 @@
 ## 不改的部分（明确保留）
 
 - 破坏性操作确认文案（撤销/清理），仍说明"会发生什么"。
+- Google 登录的失败措辞见 `docs/google-signin-fix-2026-09-26.md`（同一轮里的另一个缺陷）。
 - 活动设备与客户端的**数据本身**（IP 属地、最近活动、设备 ID、过期时间）。
 - 「错误详情」展开后的诊断文本（`SynapseFailureMessage` / `SynapseApiErrorFormatter` 原样保留），
   以及更新弹窗既有的「错误详情」折叠区。
 - 敏感值不完整展示的策略（README 约定），只删除"我们不会展示 X"这类自述句。
 
-## 核对结果
+## 落地情况
 
-- UI-COPY-01、02 → `ui/UiMessageText.kt`（新增）+ `ui/SynapseMobileApp.kt` `StatusBanner` / 两处会话错误卡 + `ui/TurnstileVerificationView.kt`。
-- UI-COPY-03～20、21～22、33～36 → `ui/SynapseMobileApp.kt`。
-- UI-COPY-23～24 与 UI-COPY-25～31 → `ui/SynapseLoginViewModel.kt`（状态/结果文案）。
+提交 `c7c366a`（已推 `origin/main`）。逐条去向：
+
+- UI-COPY-01（横幅只显摘要 + 「详情」展开）→ 新增 `ui/UiMessageText.kt`（`splitUiMessage` / `uiMessageSummary`），
+  `StatusBanner` 改为 `Column(summary + 可选 details + 详情按钮)`。**这里不是纯文案改动**：
+  横幅多了一个展开/收起的局部状态与一个分支，属于展示层逻辑变更。
+- UI-COPY-02（卡片只显摘要）→ `SynapseMobileApp.kt` 活动会话不可用卡、会话操作失败行、
+  Google 配置错误卡、Linux.do 配置错误卡包 `uiMessageSummary(...)`；
+  `TurnstileVerificationView.kt` 的人机验证配置错误卡同样处理。
+- UI-COPY-03～20、21～22、33～36 → `ui/SynapseMobileApp.kt`（其中 UI-COPY-22 把原来的四分支 `Text(when{…})`
+  改成 `tokenNotice` 变量 + `if (tokenNotice != null)`，有效令牌时不再输出任何解释句）。
+- UI-COPY-23～24 与 UI-COPY-25～31 → `ui/SynapseLoginViewModel.kt`（状态/结果文案，无控制流变动）。
 - UI-COPY-32 → `core/update/UpdateDialog.kt`。
-- UI-COPY-37 → `core/auth/AuthModels.kt`。
-- 全部改动均为文案/展示层级，未触碰鉴权流程、拦截器、存储与安全中间件顺序；
-  编译与测试交由 GitHub Actions（本地禁构建）。
+- UI-COPY-37 → `core/auth/AuthModels.kt`（`summaryLines` 不再输出 challenge / rpId / credential 数量 /
+  userVerification；`SynapsePasskeyJsonTest` 只断言不泄露原始 challenge/credential id，仍成立）。
+- 鉴权流程、拦截器、凭据存储、`src/app.ts` 风格的中间件顺序均未触碰；
+  `SynapseFailureMessage` / `SynapseApiErrorFormatter` 数据层文本原样保留（它们的用例测试未改）。
+
+## 验证
+
+本地禁止构建，全部交给 GitHub Actions：
+
+- 提交：`c7c366ad3fadfb6cead212cd96c637138d79bc69`（已签名，`git log -1 --format=%G?` = `G`）
+- CI：`Build Synapse Android`（run `36210030127`）= `completed / success`
+- Release：`v1.0.96-c7c366ad`
+- 本次未动任何测试文件，因此测试结果等于回归基线（18 个 `src/test` 文件全部参与）
