@@ -695,6 +695,7 @@ Content-Type: application/json
 
 - `pollToken` 不进入二维码，只由 Web 端保存和轮询使用。
 - `scanToken` 只随二维码传给安卓端，用于证明安卓端扫描的是当前二维码。
-- 客户端登录令牌不要写日志，不要放入 URL。安卓端本地授权信息页可以展示并复制当前账号的 `sml_` 客户端登录令牌、过期时间、账号信息和设备 ID，但不得展示或复制 JWT、密码、`scanToken`。
+- 客户端登录令牌不要写日志，不要放入 URL。安卓端本地授权信息页可以展示并复制当前账号的 `sml_` 客户端登录令牌、过期时间、账号信息和设备 ID，但不得展示或复制 JWT、密码、`scanToken`。界面只渲染脱敏预览（`sml_xxxx...yyyy`）。
+- 复制 `sml_` 客户端登录令牌必须先通过系统锁屏凭据确认（`KeyguardManager.createConfirmDeviceCredentialIntent()`，按 `RESULT_OK` 判定）；设备没设锁屏（`isDeviceSecure() == false`）时不得静默放行，而是弹窗引导去系统设置创建 PIN / 图案 / 密码（`Settings.ACTION_BIOMETRIC_ENROLL`，逐级回退到 `ACTION_SECURITY_SETTINGS` / `ACTION_SETTINGS`）。写入剪贴板时在 Android 13+ 标记 `ClipDescription.EXTRA_IS_SENSITIVE`，避免系统预览提示里出现令牌明文。
 - 建议安卓端保存稳定 `deviceId`，换机或清除 App 数据后重新签发客户端令牌。
 - 扫码确认页必须显示目标站点和当前登录账号，降低误扫风险。

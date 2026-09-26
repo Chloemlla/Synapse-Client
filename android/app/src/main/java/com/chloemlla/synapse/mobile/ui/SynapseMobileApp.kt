@@ -5,6 +5,9 @@ import com.chloemlla.synapse.mobile.core.auth.SynapseFailureMessage
 import com.chloemlla.synapse.mobile.core.auth.SynapseGoogleCredentialClient
 
 import android.app.Activity
+import android.content.ClipDescription
+import android.os.Build
+import android.os.PersistableBundle
 import android.content.Intent
 import android.net.Uri
 import android.content.ClipData
@@ -109,6 +112,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chloemlla.synapse.mobile.BuildConfig
 import com.chloemlla.synapse.mobile.core.auth.StoredSynapseAccount
+import com.chloemlla.synapse.mobile.core.auth.SynapseDeviceLock
 import com.chloemlla.synapse.mobile.core.auth.SynapseDeviceSession
 import com.chloemlla.synapse.mobile.core.auth.SynapseSessionRevokeKind
 import com.chloemlla.synapse.mobile.core.auth.SynapseSessionRevokeTarget
@@ -1806,8 +1810,9 @@ private fun CredentialSummary(
             CopyableLine(
                 label = "SML 登录令牌",
                 value = active.clientLoginTokenPreview ?: "未保存",
-                // 界面只渲染预览串，复制到剪贴板的是完整令牌（协议文档允许本机 sml_ 令牌展示并复制）。
+                // 屏幕只渲染脱敏预览；完整值仅在通过锁屏验证后写进剪贴板。
                 copyValue = active.clientLoginToken.orEmpty(),
+                requiresDeviceAuth = true,
             )
             CopyableLine(
                 label = "SML 过期时间",
@@ -1904,11 +1909,59 @@ private fun CopyableLine(
     label: String,
     value: String,
     copyValue: String = value,
+    requiresDeviceAuth: Boolean = false,
 ) {
     val spacing = LocalPanelSpacing.current
+    val context = LocalContext.current
     val clipboard = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
     val canCopy = copyValue.isNotBlank() && copyValue != "未返回" && copyValue != "未保存"
+    var pendingCopy by remember { mutableStateOf<String?>(null) }
+    var showLockSetup by remember { mutableStateOf(false) }
+    var copyNotice by remember { mutableStateOf<String?>(null) }
+
+    fun writeClipboard(text: String) {
+        coroutineScope.launch { clipboard.setClipEntry(text.toSensitiveClipEntry(label)) }
+        copyNotice = "已复制到剪贴板"
+    }
+
+    val confirmLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val pending = pendingCopy
+        pendingCopy = null
+        if (pending == null) return@rememberLauncherForActivityResult
+        if (result.resultCode == Activity.RESULT_OK) {
+            writeClipboard(pending)
+        } else {
+            copyNotice = "未完成验证，没有复制"
+        }
+    }
+
+    fun requestCopy() {
+        copyNotice = null
+        if (!requiresDeviceAuth) {
+            writeClipboard(copyValue)
+            return
+        }
+        // 没锁屏、或系统给不出确认入口时先引导设置，不静默放行。
+        if (!SynapseDeviceLock.isSecure(context)) {
+            showLockSetup = true
+            return
+        }
+        val intent = SynapseDeviceLock.confirmIntent(context)
+        if (intent == null) {
+            showLockSetup = true
+            return
+        }
+        pendingCopy = copyValue
+        runCatching { confirmLauncher.launch(intent) }
+            .onFailure {
+                pendingCopy = null
+                copyNotice = "无法打开系统验证界面，没有复制"
+            }
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -1939,19 +1992,61 @@ private fun CopyableLine(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                copyNotice?.let { notice ->
+                    Text(
+                        text = notice,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             OutlinedButton(
                 enabled = canCopy,
-                onClick = {
-                    coroutineScope.launch {
-                        clipboard.setClipEntry(copyValue.toClipEntry(label))
-                    }
-                },
+                onClick = { requestCopy() },
             ) {
                 ButtonLabel(Icons.Outlined.ContentCopy, "复制")
             }
         }
     }
+
+    if (showLockSetup) {
+        AlertDialog(
+            onDismissRequest = { showLockSetup = false },
+            icon = { Icon(Icons.Outlined.VerifiedUser, contentDescription = null) },
+            title = { Text("需要先设置锁屏") },
+            text = {
+                Text(
+                    text = "复制登录令牌要先通过锁屏验证（PIN、图案、密码或指纹）。"
+                        + "当前设备还没有设置锁屏，请先在系统设置里开启。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLockSetup = false
+                        if (!SynapseDeviceLock.openLockSetup(context)) {
+                            copyNotice = "请手动到系统设置里设置锁屏"
+                        }
+                    },
+                ) { Text("去设置") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLockSetup = false }) { Text("取消") }
+            },
+        )
+    }
+}
+
+/** 写入剪贴板；Android 13+ 标记为敏感内容，系统提示里就不会预览令牌明文。 */
+private fun String.toSensitiveClipEntry(label: String): ClipEntry {
+    val clip = ClipData.newPlainText(label, this)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        clip.description.extras = PersistableBundle().apply {
+            putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+        }
+    }
+    return ClipEntry(clip)
 }
 
 private fun String.toClipEntry(label: String): ClipEntry =
