@@ -393,7 +393,7 @@ private fun UpdateAvailableDialog(
                 }
                 if (timeMatched) {
                     Text(
-                        text = "该版本按发布时间判定为更新（版本号无法语义化比较），如已安装可忽略。",
+                        text = "该版本可能不是最新，如已安装可忽略。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline,
                     )

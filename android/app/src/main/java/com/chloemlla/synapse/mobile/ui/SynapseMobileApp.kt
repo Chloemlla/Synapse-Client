@@ -514,13 +514,42 @@ private fun StatusBanner(
                 state.loading -> MaterialTheme.colorScheme.onSurface
                 else -> MaterialTheme.colorScheme.onSecondaryContainer
             }
-            Text(
-                text = state.error ?: state.status.ifBlank { "处理中..." },
+            // 默认只展示摘要行：诊断细节（HTTP 状态 / 异常类型 / 原因链）折叠到「详情」。
+            val feedback = splitUiMessage(state.error ?: state.status.ifBlank { "处理中..." })
+            var showFeedbackDetails by remember(feedback.summary, feedback.details) {
+                mutableStateOf(false)
+            }
+            Column(
                 modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyMedium,
-                softWrap = true,
-                color = contentColor,
-            )
+                verticalArrangement = Arrangement.spacedBy(spacing.tightTextSpacing - 1.dp),
+            ) {
+                Text(
+                    text = feedback.summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    softWrap = true,
+                    color = contentColor,
+                )
+                if (feedback.hasDetails) {
+                    if (showFeedbackDetails) {
+                        Text(
+                            text = feedback.details.orEmpty(),
+                            style = MaterialTheme.typography.bodySmall,
+                            softWrap = true,
+                            color = contentColor.copy(alpha = 0.85f),
+                        )
+                    }
+                    TextButton(
+                        onClick = { showFeedbackDetails = !showFeedbackDetails },
+                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                        modifier = Modifier.heightIn(min = 24.dp),
+                    ) {
+                        Text(
+                            text = if (showFeedbackDetails) "收起详情" else "详情",
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
+            }
             if (!state.loading && onDismiss != null && (state.error != null || state.status.isNotBlank())) {
                 IconButton(
                     onClick = onDismiss,
@@ -554,7 +583,7 @@ private fun LoginPanel(
     PanelColumn(state = state, onDismissFeedback = viewModel::clearFeedback) {
         SectionTitle(
             text = "登录本客户端",
-            subtitle = "签发本机 SML 令牌，用于静默登录和网页登录确认。",
+            subtitle = "登录后用于静默登录和网页登录确认。",
             icon = Icons.AutoMirrored.Outlined.Login,
         )
         CredentialSummary(
@@ -567,8 +596,8 @@ private fun LoginPanel(
                 illustration = DynamicColorImageVectors.download(),
                 title = "首次使用",
                 lines = listOf(
-                    "先登录本客户端签发 SML 令牌，之后可用「网页登录」扫码确认电脑端。",
-                    "已在网页完成二次验证时，也可在下方粘贴 JWT 直接授权本机。",
+                    "先登录本客户端，之后可用「网页登录」扫码确认电脑端。",
+                    "已在网页端登录时，也可在下方粘贴 JWT 直接授权本机。",
                 ),
             )
         }
@@ -576,7 +605,7 @@ private fun LoginPanel(
         // Primary path: credentials, Turnstile, login, and in-flow 2FA.
         SectionCard(
             title = "账号密码登录",
-            subtitle = "主路径：填写账号信息并签发本机令牌。",
+            subtitle = "填写账号信息完成登录。",
             icon = Icons.AutoMirrored.Outlined.Login,
             emphasized = true,
         ) {
@@ -668,7 +697,7 @@ private fun LoginPanel(
                 }
             }
             Text(
-                text = "这是登录本客户端；如需二次验证，完成 TOTP 或 Passkey 后才会保存客户端令牌。",
+                text = "如需二次验证，完成 TOTP 或通行密钥后即完成登录。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -679,7 +708,6 @@ private fun LoginPanel(
                     lines = listOf(
                         "账号：${challenge.user?.username ?: state.username}",
                         "验证方式：${challenge.methodLabel}",
-                        "二次验证凭据：已接收",
                     ),
                 )
                 if (challenge.methods.any { it.equals("Passkey", ignoreCase = true) }) {
@@ -699,7 +727,7 @@ private fun LoginPanel(
                     }
                     if (activity == null) {
                         Text(
-                            text = "当前界面无法获取 Activity，暂不能唤起 Credential Manager。",
+                            text = "暂时无法唤起系统通行密钥，请稍后重试。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
@@ -740,11 +768,10 @@ private fun LoginPanel(
             }
             state.passkeyOptions?.let { options ->
                 InfoCard(
-                    title = if (options.discoverable) "Discoverable Passkey" else "Passkey 验证中",
+                    title = "通行密钥验证中",
                     icon = Icons.Outlined.Key,
                     lines = options.summaryLines + listOf(
                         "系统通行密钥界面应已自动弹出；若未弹出可点下方按钮重试。",
-                        "不会在界面展示 challenge 或 credential id 原文。",
                     ),
                 )
                 val context = LocalContext.current
@@ -792,7 +819,7 @@ private fun LoginPanel(
         if (state.googleAuthConfig.canSignIn || state.googleAuthConfigLoading || state.googleAuthConfigError != null) {
             SectionCard(
                 title = "使用 Google 账号登录",
-                subtitle = "通过 Credential Manager 获取 Google ID Token，对接 Happy-TTS /api/auth/google。",
+                subtitle = "使用系统账号选择器完成 Google 授权。",
                 icon = Icons.Outlined.AccountCircle,
                 secondary = true,
             ) {
@@ -807,7 +834,7 @@ private fun LoginPanel(
                         icon = Icons.Outlined.WarningAmber,
                         title = "Google 登录配置不可用",
                         lines = listOf(
-                            state.googleAuthConfigError ?: "无法加载 Google 登录配置。",
+                            uiMessageSummary(state.googleAuthConfigError ?: "无法加载 Google 登录配置。"),
                             "可稍后重试，或继续使用密码 / 通行密钥登录。",
                         ),
                     )
@@ -835,7 +862,7 @@ private fun LoginPanel(
                         ButtonLabel(Icons.Outlined.AccountCircle, "使用 Google 账号登录")
                     }
                     Text(
-                        text = "将唤起系统 Google 账号选择；登录成功后自动签发本机 SML 令牌。",
+                        text = "将唤起系统 Google 账号选择。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -846,7 +873,7 @@ private fun LoginPanel(
         if (state.linuxDoAuthConfig.canSignIn || state.linuxDoAuthConfigLoading || state.linuxDoAuthConfigError != null) {
             SectionCard(
                 title = "使用 Linux.do 登录",
-                subtitle = "浏览器完成 OAuth 授权后，用 ticket 换取 JWT 并签发本机 SML 令牌。",
+                subtitle = "在浏览器完成授权后回到 App 即可登录。",
                 icon = Icons.Outlined.AccountCircle,
                 secondary = true,
             ) {
@@ -861,7 +888,7 @@ private fun LoginPanel(
                         icon = Icons.Outlined.WarningAmber,
                         title = "Linux.do 登录配置不可用",
                         lines = listOf(
-                            state.linuxDoAuthConfigError ?: "无法加载 Linux.do 登录配置。",
+                            uiMessageSummary(state.linuxDoAuthConfigError ?: "无法加载 Linux.do 登录配置。"),
                             "可稍后重试，或继续使用密码 / Google / 通行密钥登录。",
                         ),
                     )
@@ -901,9 +928,9 @@ private fun LoginPanel(
                     }
                     Text(
                         text = if (state.linuxDoBrowserOpened) {
-                            "已打开授权页。完成后应自动回 App；若仍停留在浏览器，请点“打开 Synapse Mobile”或粘贴回调链接/ticket。"
+                            "已打开授权页。完成后应自动回 App；若仍停留在浏览器，可粘贴回调链接或 ticket。"
                         } else {
-                            "将打开系统浏览器访问 Happy-TTS /api/auth/linuxdo/start?client=synapse-android。授权完成后优先经 synapse:// 或 App Links 回 App；也可随时在下方粘贴回调链接或 ticket。"
+                            "将打开系统浏览器完成授权；完成后会自动回到 App，也可在下方粘贴回调链接或 ticket。"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -920,7 +947,7 @@ private fun LoginPanel(
                         enabled = !state.loading,
                         label = { Text("Linux.do 回调链接或 ticket") },
                         supportingText = {
-                            Text("可粘贴完整回调 URL（含 ticket=）、裸 query（ticket=...），或仅粘贴 ticket 字符串。")
+                            Text("可粘贴回调链接或 ticket。")
                         },
                     )
                     OutlinedButton(
@@ -965,7 +992,7 @@ private fun LoginPanel(
                     .height(112.dp),
                 minLines = 2,
                 enabled = !state.loading,
-                supportingText = { Text("仅粘贴完整 JWT，应用不会完整展示令牌内容。") },
+                supportingText = { Text("请粘贴完整 JWT。") },
                 label = { Text("网页端或二次验证后的 JWT") },
                 trailingIcon = {
                     IconButton(
@@ -1017,7 +1044,7 @@ private fun QrPanel(
         ?: if (state.hasUsableQrPayload) {
             "二维码有效，确认前请核对目标站点和账号。"
         } else {
-            "扫描或粘贴 synapse://mobile-login 二维码 payload。"
+            "扫描或粘贴网页登录二维码内容。"
         }
     val canConfirmWebLogin =
         !state.loading && state.hasUsableQrPayload && state.hasAnyWebLoginCredential
@@ -1078,8 +1105,8 @@ private fun QrPanel(
         }
 
         SectionCard(
-            title = "2. 核对 payload",
-            subtitle = "可粘贴二维码内容，并查看解析结果。",
+            title = "2. 核对二维码内容",
+            subtitle = "可粘贴二维码内容。",
             icon = Icons.Outlined.QrCodeScanner,
         ) {
             OutlinedTextField(
@@ -1092,7 +1119,7 @@ private fun QrPanel(
                 enabled = !state.loading,
                 isError = state.qrPayloadError != null,
                 supportingText = { Text(qrPayloadHelperText) },
-                label = { Text("网页登录二维码 payload") },
+                label = { Text("网页登录二维码内容") },
                 trailingIcon = {
                     IconButton(
                         enabled = !state.loading,
@@ -1114,7 +1141,7 @@ private fun QrPanel(
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.ContentPaste,
-                            contentDescription = "从剪贴板粘贴二维码 payload",
+                            contentDescription = "从剪贴板粘贴二维码内容",
                         )
                     }
                 },
@@ -1140,7 +1167,6 @@ private fun QrPanel(
                     icon = Icons.Outlined.QrCodeScanner,
                     lines = listOf(
                         "目标站点：${payload.apiBaseUrl}",
-                        "Session：${payload.sessionId}",
                         "过期时间：${SynapseTokenExpiry.formatInstantDisplay(payload.expiresAt)}",
                         "状态：${if (payload.isExpired) "已过期，请重新扫码" else "有效，可继续确认"}",
                     ),
@@ -1259,9 +1285,9 @@ private fun WebLoginAccountChoice(
 ) {
     val spacing = LocalPanelSpacing.current
     val credentialLabel = when {
-        account.hasJwt && account.hasClientLoginToken -> "可用凭据：JWT + SML"
-        account.hasJwt -> "可用凭据：JWT"
-        account.hasClientLoginToken -> "可用凭据：SML"
+        account.hasJwt && account.hasClientLoginToken -> "JWT + SML"
+        account.hasJwt -> "JWT"
+        account.hasClientLoginToken -> "SML"
         else -> "无可用网页登录凭据"
     }
     OutlinedButton(
@@ -1531,7 +1557,7 @@ private fun DeviceSessionsSection(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "IP 地址仅显示脱敏摘要，属地来自服务端记录。",
+                text = "IP 地址已脱敏显示。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
@@ -1560,7 +1586,7 @@ private fun DeviceSessionsSection(
         } else if (state.deviceSessionsError != null && state.deviceSessions.sessions.isEmpty()) {
             InfoCard(
                 title = "活动会话不可用",
-                lines = listOf(state.deviceSessionsError ?: "无法加载活动会话。"),
+                lines = listOf(uiMessageSummary(state.deviceSessionsError ?: "无法加载活动会话。")),
                 icon = Icons.Outlined.WarningAmber,
             )
             OutlinedButton(
@@ -1588,7 +1614,7 @@ private fun DeviceSessionsSection(
         }
         if (state.deviceSessionsError != null && state.deviceSessions.sessions.isNotEmpty()) {
             Text(
-                text = state.deviceSessionsError ?: "会话操作失败。",
+                text = uiMessageSummary(state.deviceSessionsError ?: "会话操作失败。"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -1761,20 +1787,23 @@ private fun CredentialSummary(
                 label = "SML 过期时间",
                 value = SynapseTokenExpiry.formatDisplay(active.clientLoginTokenExpiresAt) ?: "未保存",
             )
-            Text(
-                text = when {
-                    active.clientLoginToken == null && active.clientLoginTokenExpiresAt != null ->
-                        "SML 登录令牌已过期并已自动吊销，请重新完成授权登录。"
-                    active.isClientLoginTokenExpired ->
-                        "SML 登录令牌已过期，请重新完成授权登录。"
-                    active.hasClientLoginToken ->
-                        "SML 登录令牌有效期以服务端签发时间为准。"
-                    else ->
-                        "当前账号尚未保存 SML 登录令牌。"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // 只有过期或缺令牌时才需要给一句话；有有效令牌时不再解释有效期来源。
+            val tokenNotice = when {
+                active.clientLoginToken == null && active.clientLoginTokenExpiresAt != null ->
+                    "登录已过期，请重新登录。"
+                active.isClientLoginTokenExpired ->
+                    "登录已过期，请重新登录。"
+                !active.hasClientLoginToken ->
+                    "当前账号尚未保存 SML 登录令牌。"
+                else -> null
+            }
+            if (tokenNotice != null) {
+                Text(
+                    text = tokenNotice,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             if (accounts.size > 1) {
                 SectionTitle(

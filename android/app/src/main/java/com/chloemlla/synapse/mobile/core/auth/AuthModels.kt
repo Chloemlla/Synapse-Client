@@ -74,12 +74,12 @@ data class PasskeyAuthenticationOptions(
     val challenge: String? = null,
     val discoverable: Boolean = false,
 ) {
-    val summaryLines: List<String> = listOfNotNull(
-        "Challenge：${if (hasChallenge) "已返回" else "未返回"}",
-        rpId?.takeIf { it.isNotBlank() }?.let { "RP ID：$it" },
-        if (discoverable) "模式：Discoverable（无需用户名）" else "模式：指定用户",
-        "Credential 数量：$allowCredentialCount",
-        userVerification?.takeIf { it.isNotBlank() }?.let { "User Verification：$it" },
+    /**
+     * 只保留用户在系统通行密钥界面上需要知道的信息；challenge / rpId / credential 数量 /
+     * userVerification 属于协议实现细节，不进入界面。
+     */
+    val summaryLines: List<String> = listOf(
+        if (discoverable) "无需输入用户名，直接选择本机保存的通行密钥。" else "请选择要使用的通行密钥。",
     )
 }
 

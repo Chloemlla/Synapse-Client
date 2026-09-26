@@ -77,7 +77,7 @@ internal fun TurnstileVerificationPanel(
                     error = true,
                 )
                 Text(
-                    text = state.turnstileConfigError.orEmpty(),
+                    text = uiMessageSummary(state.turnstileConfigError.orEmpty()),
                     style = MaterialTheme.typography.bodyMedium,
                     softWrap = true,
                 )

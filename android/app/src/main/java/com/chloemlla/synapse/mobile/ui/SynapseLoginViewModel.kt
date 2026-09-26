@@ -49,7 +49,7 @@ class SynapseLoginViewModel(
             mutableState.update {
                 it.copy(
                     credentials = repository.credentials(),
-                    status = "检测到 SML 登录令牌已过期，已自动吊销本地令牌，请重新完成授权登录。",
+                    status = "登录已过期，请重新登录。",
                 )
             }
         }
@@ -119,7 +119,7 @@ class SynapseLoginViewModel(
                     it.copy(
                         credentials = refreshedCredentials,
                         status = if (revokedExpired) {
-                            "已切换账号，并检测到 SML 登录令牌已过期，已自动吊销本地令牌，请重新完成授权登录。"
+                            "已切换账号；该账号登录已过期，请重新登录。"
                         } else {
                             "已切换当前账号：${credentials.displayName ?: accountId}"
                         },
@@ -347,7 +347,7 @@ class SynapseLoginViewModel(
                         )
                     }
                     val name = result.user?.username?.takeIf { it.isNotBlank() } ?: current.username
-                    "本客户端登录成功，已签发客户端登录令牌。当前账号：$name"
+                    "登录成功。当前账号：$name"
                 }
                 is LoginOutcome.TwoFactorRequired -> {
                     mutableState.update {
@@ -503,7 +503,7 @@ class SynapseLoginViewModel(
             )
         }
         val name = result.user?.username?.takeIf { it.isNotBlank() } ?: username
-        return "Passkey 验证成功，已登录本客户端并签发客户端登录令牌。当前账号：$name"
+        return "Passkey 登录成功。当前账号：$name"
     }
 
     fun finishPasskeyAuthentication() {
@@ -557,7 +557,7 @@ class SynapseLoginViewModel(
                 )
             }
             val name = result.user?.username?.takeIf { it.isNotBlank() } ?: username
-            "Passkey 验证成功，已登录本客户端并签发客户端登录令牌。当前账号：$name"
+            "Passkey 登录成功。当前账号：$name"
         }
     }
 
@@ -592,7 +592,7 @@ class SynapseLoginViewModel(
                 )
             }
             val name = result.user?.username?.takeIf { it.isNotBlank() } ?: current.username
-            "TOTP 验证成功，已登录本客户端并签发客户端登录令牌。当前账号：$name"
+            "TOTP 登录成功。当前账号：$name"
         }
     }
 
@@ -903,7 +903,7 @@ class SynapseLoginViewModel(
         viewModelScope.launch {
             runCatching {
                 val revoked = repository.revokeSession(target)
-                require(revoked) { "服务端未确认会话已撤销。" }
+                require(revoked) { "会话撤销未生效，请稍后重试。" }
                 repository.listDeviceSessions()
             }
                 .onSuccess { sessions ->
@@ -1038,7 +1038,7 @@ class SynapseLoginViewModel(
             val name = outcome.user?.username ?: outcome.user?.email ?: "当前账号"
             liveUpdateNotifier?.publish(SynapseLiveUpdateCopy.linuxDoSucceeded())
             activeLiveUpdateKind = null
-            "Linux.do 登录成功，已登录本客户端并签发客户端登录令牌。当前账号：$name"
+            "Linux.do 登录成功。当前账号：$name"
         }
     }
 
@@ -1097,8 +1097,8 @@ class SynapseLoginViewModel(
                     throw IllegalStateException(
                         refreshed.let { cfg ->
                             when {
-                                !cfg.enabled -> "当前服务端未启用 Google 登录。"
-                                !cfg.clientIdConfigured || cfg.clientId.isNullOrBlank() -> "服务端未配置 Google Client ID。"
+                                !cfg.enabled -> "Google 登录暂不可用。"
+                                !cfg.clientIdConfigured || cfg.clientId.isNullOrBlank() -> "Google 登录暂不可用，请稍后重试。"
                                 else -> "Google 登录不可用。"
                             }
                         },
@@ -1127,7 +1127,7 @@ class SynapseLoginViewModel(
                 )
             }
             val name = outcome.user?.username ?: outcome.user?.email ?: "当前账号"
-            "Google 登录成功，已登录本客户端并签发客户端登录令牌。当前账号：$name"
+            "Google 登录成功。当前账号：$name"
         }
     }
     fun silentLogin() {
@@ -1154,7 +1154,7 @@ class SynapseLoginViewModel(
                     selectedTab = SynapseTab.Session,
                 )
             }
-            "已使用 JWT 登录本客户端并签发客户端登录令牌。"
+            "已使用 JWT 登录。"
         }
     }
 
@@ -1251,7 +1251,7 @@ class SynapseLoginViewModel(
     fun revokeClientToken() {
         launchAction {
             val revoked = repository.revokeClientLoginToken()
-            if (revoked) "本客户端登录令牌已撤销。" else "服务端未返回 revoked=true。"
+            if (revoked) "本客户端登录令牌已撤销。" else "撤销未生效，请稍后重试。"
         }
     }
 
