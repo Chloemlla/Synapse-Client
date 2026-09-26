@@ -57,6 +57,8 @@ data class ClientTokenIssueResult(
     val success: Boolean,
     val clientLoginToken: String,
     val expiresAt: String,
+    /** 服务端判定本次签发处于降级态：有效期已被缩短。界面只提示，不当错误。 */
+    val requiresVerification: Boolean = false,
 )
 
 /**
@@ -70,6 +72,20 @@ data class ClientTokenRotationResult(
     val rotatedAt: String?,
     val nextRotationAt: String?,
     val rotationIndex: Int,
+    /** 服务端判定本代处于降级态：有效期被缩短、下一次轮换更早。界面只提示，不当错误。 */
+    val requiresVerification: Boolean = false,
+)
+
+/**
+ * 设备证明挑战（服务端 P2）。`required = false` 表示服务端没启用这层，
+ * 客户端直接跳过，不要重试也不要报错。
+ */
+data class SynapseIntegrityChallenge(
+    val success: Boolean,
+    val required: Boolean,
+    val nonce: String?,
+    val expiresAt: String?,
+    val cloudProjectNumber: String?,
 )
 
 data class JwtExchangeResult(
@@ -128,6 +144,8 @@ data class StoredSynapseAccount(
     val clientLoginTokenRotatedAt: String? = null,
     /** 第几代，服务端给的。 */
     val clientLoginTokenRotationIndex: Int = 0,
+    /** 本代是在降级状态下铸的：有效期被缩短。下一次校验通过后自动清掉。 */
+    val clientLoginTokenNeedsReverification: Boolean = false,
 ) {
     val displayName: String = username ?: email ?: userId ?: accountId
     val hasJwt: Boolean = !jwt.isNullOrBlank()
@@ -149,6 +167,7 @@ data class StoredSynapseCredentials(
     val clientLoginTokenNextRotationAt: String? = null,
     val clientLoginTokenRotatedAt: String? = null,
     val clientLoginTokenRotationIndex: Int = 0,
+    val clientLoginTokenNeedsReverification: Boolean = false,
 ) {
     val hasJwt: Boolean = !jwt.isNullOrBlank()
     val hasClientLoginToken: Boolean = !clientLoginToken.isNullOrBlank()

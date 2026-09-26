@@ -1854,6 +1854,9 @@ private fun CredentialSummary(
                     "登录已过期，请重新登录。"
                 !active.hasClientLoginToken ->
                     "当前账号尚未保存 SML 登录令牌。"
+                // 服务端没通过本机校验时只是降级：登录还在，别写成错误。
+                active.clientLoginTokenNeedsReverification ->
+                    "本机登录校验未通过，登录有效期已临时缩短，联网后会自动重试。"
                 else -> null
             }
             if (tokenNotice != null) {

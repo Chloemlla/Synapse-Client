@@ -162,6 +162,71 @@ class JsonMappingsTest {
         assertEquals(null, result.nextRotationAt)
         assertEquals(null, result.rotatedAt)
         assertEquals(0, result.rotationIndex)
+        assertFalse(result.requiresVerification)
+    }
+
+    @Test
+    fun clientTokenRotationCarriesServerDowngradeFlag() {
+        // 服务端判定降级时只是缩短了这一代的有效期，不是错误。
+        val result = JSONObject(
+            """
+            {
+              "success": true,
+              "clientLoginToken": "sml_next_value",
+              "expiresAt": "2026-09-27T00:00:00Z",
+              "requiresVerification": true
+            }
+            """.trimIndent(),
+        ).toClientTokenRotationResult()
+
+        assertTrue(result.requiresVerification)
+    }
+
+    @Test
+    fun clientTokenIssueCarriesServerDowngradeFlag() {
+        val result = JSONObject(
+            """
+            {
+              "success": true,
+              "clientLoginToken": "sml_issued_value",
+              "expiresAt": "2026-09-27T00:00:00Z",
+              "requiresVerification": true
+            }
+            """.trimIndent(),
+        ).toClientTokenIssueResult()
+
+        assertTrue(result.requiresVerification)
+        assertEquals("sml_issued_value", result.clientLoginToken)
+    }
+
+    @Test
+    fun integrityChallengeMapsNonceAndProjectNumber() {
+        val challenge = JSONObject(
+            """
+            {
+              "success": true,
+              "required": true,
+              "nonce": "challenge-nonce",
+              "expiresAt": "2026-09-26T00:05:00Z",
+              "cloudProjectNumber": "1234567890"
+            }
+            """.trimIndent(),
+        ).toSynapseIntegrityChallenge()
+
+        assertTrue(challenge.required)
+        assertEquals("challenge-nonce", challenge.nonce)
+        assertEquals("1234567890", challenge.cloudProjectNumber)
+    }
+
+    @Test
+    fun integrityChallengeDefaultsToNotRequired() {
+        // 老版本服务端没有这个端点；任何缺失都解释成"不需要证明"，客户端照常提交。
+        val challenge = JSONObject("""{"success": true}""").toSynapseIntegrityChallenge()
+
+        assertTrue(challenge.success)
+        assertFalse(challenge.required)
+        assertEquals(null, challenge.nonce)
+        assertEquals(null, challenge.cloudProjectNumber)
     }
 
     @Test

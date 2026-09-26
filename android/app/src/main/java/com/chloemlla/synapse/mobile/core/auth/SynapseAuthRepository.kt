@@ -3,6 +3,7 @@ package com.chloemlla.synapse.mobile.core.auth
 import android.net.Uri
 import android.content.Context
 import android.os.Build
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
@@ -16,6 +17,7 @@ class SynapseAuthRepository(
 ) {
     private val credentialStore = SynapseCredentialStore(context)
     private val deviceId = SynapseDeviceId(context)
+    private val integrityProvider = SynapseIntegrityProvider(context)
     private val apiClients = ConcurrentHashMap<String, OkHttpClient>()
     private val trustedApiOrigin = SynapseApiOriginPolicy.normalizeHttpsOrigin(defaultBaseUrl)
 
@@ -62,11 +64,13 @@ class SynapseAuthRepository(
             return ClientTokenRotationOutcome.NotScheduled
         }
 
+        val integrityProof = requestIntegrityProof(clientLoginToken = clientToken)
         val result = try {
             apiFor(trustedApiOrigin).rotateClientToken(
                 clientLoginToken = clientToken,
                 deviceId = deviceId.getOrCreate(),
                 reason = reason,
+                integrityProof = integrityProof,
             )
         } catch (error: SynapseApiException) {
             // 401 / 403 意味着这张令牌（或它的会话）本身已经不能用了，重试没有意义。
@@ -89,6 +93,35 @@ class SynapseAuthRepository(
         }
         credentialStore.saveClientLoginToken(result)
         return ClientTokenRotationOutcome.Rotated
+    }
+
+    /**
+     * 取一份设备证明。任何一步失败都返回 null —— **拿不到证明从不否决这次请求**，
+     * 客户端不做本地裁决，由服务端按自己的策略决定是否降级。服务端没启用这一层时
+     * 挑战会直接回 `required = false`，这里也就不会再往 Google 跑一趟。
+     */
+    private suspend fun requestIntegrityProof(
+        clientLoginToken: String? = null,
+        jwt: String? = null,
+    ): SynapseIntegrityProof? {
+        val challenge = try {
+            apiFor(trustedApiOrigin).createIntegrityChallenge(
+                deviceId = deviceId.getOrCreate(),
+                clientLoginToken = clientLoginToken,
+                jwt = jwt,
+            )
+        } catch (error: Exception) {
+            // 协程被取消就继续取消，别把取消误判成"证明拿不到"。
+            if (error is CancellationException) throw error
+            return null
+        }
+
+        val request = SynapseIntegrityPolicy.proofRequest(challenge) ?: return null
+        val integrityToken = integrityProvider.requestIntegrityToken(
+            nonce = request.nonce,
+            cloudProjectNumber = request.cloudProjectNumber,
+        )
+        return SynapseIntegrityPolicy.proof(request, integrityToken)
     }
 
     fun parseOAuthAuthorizationRequest(raw: String): SynapseOAuthAuthorizationRequest =
@@ -225,8 +258,9 @@ class SynapseAuthRepository(
             jwt = login.token,
             deviceId = deviceId.getOrCreate(),
             deviceName = deviceName.ifBlank { defaultDeviceName() },
+            integrityProof = requestIntegrityProof(jwt = login.token),
         )
-        credentialStore.saveClientLoginToken(issued.clientLoginToken, issued.expiresAt)
+        credentialStore.saveClientLoginToken(issued)
 
         return LoginOutcome.Authenticated(
             user = login.user,
@@ -264,8 +298,9 @@ class SynapseAuthRepository(
             jwt = login.token,
             deviceId = deviceId.getOrCreate(),
             deviceName = deviceName.ifBlank { defaultDeviceName() },
+            integrityProof = requestIntegrityProof(jwt = login.token),
         )
-        credentialStore.saveClientLoginToken(issued.clientLoginToken, issued.expiresAt)
+        credentialStore.saveClientLoginToken(issued)
 
         return LoginOutcome.Authenticated(
             user = login.user,
@@ -301,8 +336,9 @@ class SynapseAuthRepository(
             jwt = jwt,
             deviceId = deviceId.getOrCreate(),
             deviceName = deviceName.ifBlank { defaultDeviceName() },
+            integrityProof = requestIntegrityProof(jwt = jwt),
         )
-        credentialStore.saveClientLoginToken(issued.clientLoginToken, issued.expiresAt)
+        credentialStore.saveClientLoginToken(issued)
 
         return LoginOutcome.Authenticated(
             user = login.user,
@@ -321,9 +357,10 @@ class SynapseAuthRepository(
                 jwt = normalizedJwt,
                 deviceId = deviceId.getOrCreate(),
                 deviceName = deviceName.ifBlank { defaultDeviceName() },
+                integrityProof = requestIntegrityProof(jwt = normalizedJwt),
             )
             .also { issued ->
-                credentialStore.saveClientLoginToken(issued.clientLoginToken, issued.expiresAt)
+                credentialStore.saveClientLoginToken(issued)
             }
     }
 
@@ -383,8 +420,9 @@ class SynapseAuthRepository(
             jwt = result.token,
             deviceId = deviceId.getOrCreate(),
             deviceName = deviceName.ifBlank { defaultDeviceName() },
+            integrityProof = requestIntegrityProof(jwt = result.token),
         )
-        credentialStore.saveClientLoginToken(issued.clientLoginToken, issued.expiresAt)
+        credentialStore.saveClientLoginToken(issued)
 
         return LoginOutcome.Authenticated(
             user = result.user,
@@ -423,8 +461,9 @@ class SynapseAuthRepository(
             jwt = result.token,
             deviceId = deviceId.getOrCreate(),
             deviceName = deviceName.ifBlank { defaultDeviceName() },
+            integrityProof = requestIntegrityProof(jwt = result.token),
         )
-        credentialStore.saveClientLoginToken(issued.clientLoginToken, issued.expiresAt)
+        credentialStore.saveClientLoginToken(issued)
 
         return LoginOutcome.Authenticated(
             user = user,

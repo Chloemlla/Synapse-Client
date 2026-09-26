@@ -55,15 +55,16 @@ class SynapseCredentialStore(context: Context) {
         writeLegacyActive(load().activeAccount)
     }
 
-    fun saveClientLoginToken(clientLoginToken: String, expiresAt: String?) {
+    fun saveClientLoginToken(issued: ClientTokenIssueResult) {
         saveClientLoginToken(
             ClientTokenRotationResult(
                 success = true,
-                clientLoginToken = clientLoginToken,
-                expiresAt = expiresAt.orEmpty(),
+                clientLoginToken = issued.clientLoginToken,
+                expiresAt = issued.expiresAt,
                 rotatedAt = null,
                 nextRotationAt = null,
                 rotationIndex = 0,
+                requiresVerification = issued.requiresVerification,
             ),
         )
     }
@@ -87,6 +88,8 @@ class SynapseCredentialStore(context: Context) {
                 clientLoginTokenNextRotationAt = rotation.nextRotationAt,
                 clientLoginTokenRotatedAt = rotation.rotatedAt,
                 clientLoginTokenRotationIndex = rotation.rotationIndex,
+                // 整代覆盖：新一代判定通过就自动清掉上一代留下的降级标记。
+                clientLoginTokenNeedsReverification = rotation.requiresVerification,
             ),
         )
         saveAccounts(accounts, accountId)
@@ -124,6 +127,7 @@ class SynapseCredentialStore(context: Context) {
                 clientLoginTokenNextRotationAt = existing?.clientLoginTokenNextRotationAt,
                 clientLoginTokenRotatedAt = existing?.clientLoginTokenRotatedAt,
                 clientLoginTokenRotationIndex = existing?.clientLoginTokenRotationIndex ?: 0,
+                clientLoginTokenNeedsReverification = existing?.clientLoginTokenNeedsReverification ?: false,
             ),
         )
         removePromotedManualAccount(accounts, activeBeforeSave, accountId)
@@ -147,6 +151,7 @@ class SynapseCredentialStore(context: Context) {
             clientLoginTokenNextRotationAt = active?.clientLoginTokenNextRotationAt,
             clientLoginTokenRotatedAt = active?.clientLoginTokenRotatedAt,
             clientLoginTokenRotationIndex = active?.clientLoginTokenRotationIndex ?: 0,
+            clientLoginTokenNeedsReverification = active?.clientLoginTokenNeedsReverification ?: false,
         )
     }
 
@@ -198,7 +203,7 @@ class SynapseCredentialStore(context: Context) {
         val nextAccounts = accounts.map { account ->
             if (account.clientLoginToken != null && account.isClientLoginTokenExpiredAt(now)) {
                 changed = true
-                account.copy(jwt = null, clientLoginToken = null)
+                account.copy(jwt = null, clientLoginToken = null, clientLoginTokenNeedsReverification = false)
             } else {
                 account
             }

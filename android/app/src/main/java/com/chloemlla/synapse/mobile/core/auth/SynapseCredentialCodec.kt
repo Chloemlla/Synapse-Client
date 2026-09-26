@@ -17,6 +17,7 @@ internal object SynapseCredentialCodec {
                         .put(KEY_CLIENT_LOGIN_TOKEN_NEXT_ROTATION_AT, account.clientLoginTokenNextRotationAt)
                         .put(KEY_CLIENT_LOGIN_TOKEN_ROTATED_AT, account.clientLoginTokenRotatedAt)
                         .put(KEY_CLIENT_LOGIN_TOKEN_ROTATION_INDEX, account.clientLoginTokenRotationIndex)
+                        .put(KEY_CLIENT_LOGIN_TOKEN_NEEDS_REVERIFICATION, account.clientLoginTokenNeedsReverification)
                         .put(KEY_USER_ID, account.userId)
                         .put(KEY_USERNAME, account.username)
                         .put(KEY_EMAIL, account.email),
@@ -42,6 +43,8 @@ internal object SynapseCredentialCodec {
                             clientLoginTokenNextRotationAt = json.stringValue(KEY_CLIENT_LOGIN_TOKEN_NEXT_ROTATION_AT),
                             clientLoginTokenRotatedAt = json.stringValue(KEY_CLIENT_LOGIN_TOKEN_ROTATED_AT),
                             clientLoginTokenRotationIndex = json.intValue(KEY_CLIENT_LOGIN_TOKEN_ROTATION_INDEX),
+                            clientLoginTokenNeedsReverification =
+                                json.booleanValue(KEY_CLIENT_LOGIN_TOKEN_NEEDS_REVERIFICATION),
                             userId = json.stringValue(KEY_USER_ID),
                             username = json.stringValue(KEY_USERNAME),
                             email = json.stringValue(KEY_EMAIL),
@@ -66,6 +69,10 @@ internal object SynapseCredentialCodec {
     private fun JSONObject.intValue(name: String): Int =
         if (!has(name) || isNull(name)) 0 else optInt(name, 0).coerceAtLeast(0)
 
+    /** 同上：旧版本没有这个字段，缺省 false，别让存量凭据被判成 corrupted。 */
+    private fun JSONObject.booleanValue(name: String): Boolean =
+        has(name) && !isNull(name) && optBoolean(name, false)
+
     private const val KEY_ACCOUNT_ID = "account_id"
     private const val KEY_JWT = "jwt"
     private const val KEY_CLIENT_LOGIN_TOKEN = "client_login_token"
@@ -73,6 +80,7 @@ internal object SynapseCredentialCodec {
     private const val KEY_CLIENT_LOGIN_TOKEN_NEXT_ROTATION_AT = "client_login_token_next_rotation_at"
     private const val KEY_CLIENT_LOGIN_TOKEN_ROTATED_AT = "client_login_token_rotated_at"
     private const val KEY_CLIENT_LOGIN_TOKEN_ROTATION_INDEX = "client_login_token_rotation_index"
+    private const val KEY_CLIENT_LOGIN_TOKEN_NEEDS_REVERIFICATION = "client_login_token_needs_reverification"
     private const val KEY_USER_ID = "user_id"
     private const val KEY_USERNAME = "username"
     private const val KEY_EMAIL = "email"

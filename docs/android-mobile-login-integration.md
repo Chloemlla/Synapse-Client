@@ -588,11 +588,13 @@ Content-Type: application/json
 {
   "success": true,
   "clientLoginToken": "sml_...",
-  "expiresAt": "2026-10-02T12:00:00.000Z"
+  "expiresAt": "2026-10-02T12:00:00.000Z",
+  "requiresVerification": false
 }
 ```
 
-客户端登录令牌当前有效期为 90 天。安卓端应存入 Android Keystore 或加密后的私有存储，不应写入日志。
+客户端登录令牌当前有效期为 90 天；服务端判定设备证明处于降级态时会缩短这一代的有效期并返回
+`requiresVerification: true`（见下文「设备证明」）。安卓端应存入 Android Keystore 或加密后的私有存储，不应写入日志。
 
 安卓端使用手动 JWT 授权时，必须先调用 `GET /api/auth/me` 获取 JWT 对应的真实用户，再调用 `/api/auth/mobile-login/client-token/issue` 签发该用户的 `sml_` 客户端登录令牌。客户端需要持久化保存 `clientLoginToken` 和后端返回的 `expiresAt`。
 
@@ -637,9 +639,13 @@ Content-Type: application/json
 {
   "clientLoginToken": "sml_...",
   "deviceId": "android-device-stable-id",
-  "reason": "scheduled"
+  "reason": "scheduled",
+  "integrityNonce": "<integrity-challenge 下发的 nonce>",
+  "integrityToken": "<Play Integrity 令牌>"
 }
 ```
+
+`integrityNonce` / `integrityToken` 可选：服务端没启用设备证明时不必携带，见下节。
 
 响应：
 
@@ -653,7 +659,8 @@ Content-Type: application/json
   "nextRotationAt": "2026-09-27T00:00:00Z",
   "rotationIndex": 7,
   "rotateIntervalMs": 86400000,
-  "graceMs": 300000
+  "graceMs": 300000,
+  "requiresVerification": false
 }
 ```
 
@@ -666,6 +673,57 @@ Content-Type: application/json
    `errorCode` 为 `MOBILE_TOKEN_REUSED`；此时客户端必须清除本机 JWT 与 `sml_` 令牌并提示重新登录，**不得自动重试**。
 5. 节奏完全听 `nextRotationAt`；收到 `429`（`MOBILE_TOKEN_ROTATION_THROTTLED` / `MOBILE_TOKEN_ROTATION_QUOTA`）时按本地退避时延后重试，不弹错误。
 6. 服务端未部署本接口时（旧后端 404），客户端保持旧令牌不变，按退避时间重试即可，不影响登录。
+7. `requiresVerification: true` 表示服务端把这一代判成了**降级**（有效期缩短、`nextRotationAt` 提前），
+   **不是错误**：令牌照常可用，客户端只需把标记存下来，界面提示一句，下一次校验通过会自然清掉。
+   轮换与签发（`/client-token/issue`）的响应里都可能出现这个字段。
+
+### 设备证明（Play Integrity）
+
+服务端启用设备证明后，轮换与签发都要先换一份一次性证明。流程：
+
+```http
+POST /api/auth/mobile-login/integrity-challenge
+Content-Type: application/json
+```
+
+```json
+{
+  "deviceId": "android-device-stable-id",
+  "clientLoginToken": "sml_..."
+}
+```
+
+身份用 `clientLoginToken`（轮换场景）或 `Authorization: Bearer <jwt>`（首次签发场景）二者之一表达。
+服务端未启用该层时返回 `{"success": true, "required": false}`，客户端**直接跳过**，不要重试也不要报错。
+
+启用时返回：
+
+```json
+{
+  "success": true,
+  "required": true,
+  "nonce": "<一次性挑战值>",
+  "expiresAt": "2026-09-26T00:05:00Z",
+  "minDeviceIntegrity": "MEETS_DEVICE_INTEGRITY",
+  "cloudProjectNumber": "1234567890"
+}
+```
+
+安卓端把 `nonce` 交给 Play Integrity（`setNonce` + `setCloudProjectNumber`），把拿到的令牌作为
+`integrityToken` 与 `integrityNonce` 一起回传到 `/client-token/rotate` 或 `/client-token/issue`。
+
+要点：
+
+1. `nonce` 一次性、且绑定申请它的账号与设备：用过即废，换账号或换设备都不认。
+2. 服务端**只判应用与运行环境是否可信**（应用是否来自 Play、设备完整性等级、授权状态、时间戳新鲜度），
+   不产生也不保存设备指纹。
+3. **证明拿不到从不影响登录**：申请失败、设备没有 Play 服务、离线、超时，一律照常调用轮换。
+   服务端按自己的策略决定是否降级 —— 降级只是缩短这一代有效期并要求更早再校验。
+4. 客户端不做本地裁决，也不在界面上解释原因。
+
+实现见 `core/auth/SynapseIntegrityPolicy.kt`（何时申请、怎么组装证明，纯逻辑）、
+`core/auth/SynapseIntegrityProvider.kt`（唯一依赖 Play 服务的一环）、
+`core/auth/SynapseAuthRepository.kt`（编排并随请求提交）。
 
 策略正文见服务端仓库 `docs/mobile-token-risk-control.md`；客户端实现见
 `core/auth/SynapseClientTokenRotation.kt`（到期判定与退避）、`core/auth/SynapseAuthRepository.kt`

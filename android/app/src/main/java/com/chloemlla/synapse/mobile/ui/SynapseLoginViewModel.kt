@@ -66,14 +66,18 @@ class SynapseLoginViewModel(
      */
     private fun rotateClientTokenOnLaunch() {
         viewModelScope.launch {
-            val outcome = runCatching { repository.ensureClientTokenRotation() }.getOrNull()
-            if (outcome == ClientTokenRotationOutcome.RequiresSignIn) {
-                mutableState.update {
+            when (runCatching { repository.ensureClientTokenRotation() }.getOrNull()) {
+                ClientTokenRotationOutcome.RequiresSignIn -> mutableState.update {
                     it.copy(
                         credentials = repository.credentials(),
                         status = "登录状态已失效，请重新登录。",
                     )
                 }
+                // 换过代就把新的节奏与降级标记带进界面，别让面板停在上一代。
+                ClientTokenRotationOutcome.Rotated -> mutableState.update {
+                    it.copy(credentials = repository.credentials())
+                }
+                else -> Unit
             }
         }
     }

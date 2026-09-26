@@ -203,27 +203,51 @@ class SynapseMobileLoginApi(
         jwt: String,
         deviceId: String,
         deviceName: String,
+        integrityProof: SynapseIntegrityProof? = null,
     ): ClientTokenIssueResult =
         post(
             path = "/api/auth/mobile-login/client-token/issue",
             bearerToken = jwt,
             body = JSONObject()
                 .put("deviceId", deviceId)
-                .put("deviceName", deviceName),
+                .put("deviceName", deviceName)
+                .applyIntegrityProof(integrityProof),
         ) { it.toClientTokenIssueResult() }
 
     suspend fun rotateClientToken(
         clientLoginToken: String,
         deviceId: String,
         reason: String,
+        integrityProof: SynapseIntegrityProof? = null,
     ): ClientTokenRotationResult =
         post(
             path = "/api/auth/mobile-login/client-token/rotate",
             body = JSONObject()
                 .put("clientLoginToken", clientLoginToken)
                 .put("deviceId", deviceId)
-                .put("reason", reason),
+                .put("reason", reason)
+                .applyIntegrityProof(integrityProof),
         ) { it.toClientTokenRotationResult() }
+
+    /**
+     * 申请设备证明挑战。身份用 `clientLoginToken`（轮换）或 `jwt`（首次签发）二者之一表达。
+     */
+    suspend fun createIntegrityChallenge(
+        deviceId: String,
+        clientLoginToken: String? = null,
+        jwt: String? = null,
+    ): SynapseIntegrityChallenge =
+        post(
+            path = "/api/auth/mobile-login/integrity-challenge",
+            bearerToken = jwt,
+            body = JSONObject()
+                .put("deviceId", deviceId)
+                .apply {
+                    clientLoginToken
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { put("clientLoginToken", it) }
+                },
+        ) { it.toSynapseIntegrityChallenge() }
 
     suspend fun exchangeClientToken(clientLoginToken: String, deviceId: String): JwtExchangeResult =
         post(
@@ -408,6 +432,14 @@ class SynapseMobileLoginApi(
         entries.joinToString("&") { (key, value) ->
             "${Uri.encode(key)}=${Uri.encode(value)}"
         }
+
+    /** 有证明就带上；没有就什么都不加，服务端按自己的 failOpen 策略处理。 */
+    private fun JSONObject.applyIntegrityProof(proof: SynapseIntegrityProof?): JSONObject = apply {
+        proof?.let {
+            put("integrityNonce", it.nonce)
+            put("integrityToken", it.integrityToken)
+        }
+    }
 
     private fun Map<String, String>.toJsonObject(): JSONObject =
         JSONObject().apply { forEach { (key, value) -> put(key, value) } }

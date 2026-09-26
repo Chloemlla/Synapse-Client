@@ -64,5 +64,28 @@ class SynapseCredentialCodecTest {
         assertEquals(null, decoded.first().clientLoginTokenNextRotationAt)
         assertEquals(null, decoded.first().clientLoginTokenRotatedAt)
         assertEquals(0, decoded.first().clientLoginTokenRotationIndex)
+        assertEquals(false, decoded.first().clientLoginTokenNeedsReverification)
+    }
+
+    @Test
+    fun encodeDecodeAccountsRoundTripsReverificationFlag() {
+        // 设备证明降级标记要能跨重启留存，否则界面提示一次就没了。
+        val account = StoredSynapseAccount(
+            accountId = "user-1",
+            jwt = "jwt-value",
+            clientLoginToken = "sml_token_value",
+            clientLoginTokenExpiresAt = "2026-09-27T00:00:00Z",
+            userId = "user-1",
+            username = "alice",
+            email = "alice@example.com",
+            clientLoginTokenRotationIndex = 3,
+            clientLoginTokenNeedsReverification = true,
+        )
+
+        val decoded = SynapseCredentialCodec.decodeAccounts(
+            SynapseCredentialCodec.encodeAccounts(listOf(account)),
+        )
+
+        assertEquals(listOf(account), decoded)
     }
 }

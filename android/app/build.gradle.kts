@@ -193,6 +193,8 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
     implementation("com.google.android.gms:play-services-auth:21.6.0")
+    // 设备证明（服务端 P2）：轮换登录令牌时附一份 Google Play 签发的一次性证明。
+    implementation("com.google.android.play:integrity:1.6.0")
     implementation("com.squareup.okhttp3:okhttp:5.4.0")
     implementation("com.tencent:mmkv:2.4.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")

@@ -61,6 +61,7 @@ internal fun JSONObject.toClientTokenIssueResult(): ClientTokenIssueResult =
         success = optBoolean("success"),
         clientLoginToken = optString("clientLoginToken"),
         expiresAt = optString("expiresAt"),
+        requiresVerification = optBoolean("requiresVerification", false),
     )
 
 internal fun JSONObject.toClientTokenRotationResult(): ClientTokenRotationResult =
@@ -71,6 +72,20 @@ internal fun JSONObject.toClientTokenRotationResult(): ClientTokenRotationResult
         rotatedAt = optString("rotatedAt").takeIf { it.isNotBlank() },
         nextRotationAt = optString("nextRotationAt").takeIf { it.isNotBlank() },
         rotationIndex = optInt("rotationIndex"),
+        requiresVerification = optBoolean("requiresVerification", false),
+    )
+
+/**
+ * 设备证明挑战。老版本服务端没有这个端点，客户端也拿不到这份 JSON；
+ * 这里的缺省一律解释成"服务端不需要证明"。
+ */
+internal fun JSONObject.toSynapseIntegrityChallenge(): SynapseIntegrityChallenge =
+    SynapseIntegrityChallenge(
+        success = optBoolean("success", true),
+        required = optBoolean("required", false),
+        nonce = optString("nonce").takeIf { it.isNotBlank() },
+        expiresAt = optString("expiresAt").takeIf { it.isNotBlank() },
+        cloudProjectNumber = optString("cloudProjectNumber").takeIf { it.isNotBlank() },
     )
 
 internal fun JSONObject.toJwtExchangeResult(): JwtExchangeResult =

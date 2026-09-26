@@ -72,6 +72,11 @@
 -keep class com.google.android.libraries.identity.googleid.** { *; }
 -dontwarn com.google.android.libraries.identity.googleid.**
 
+# 设备证明（服务端 P2）：Play Integrity SDK 内部按类名反射装配 IntegrityManager，
+# 与上面的 gms.auth 同理整包保留，避免 R8 改名后运行时取不到实现。
+-keep class com.google.android.play.core.integrity.** { *; }
+-dontwarn com.google.android.play.core.integrity.**
+
 ############################################################
 # Lumen Crash SDK minify exemption
 # Artifact: com.chloemlla.lumen:lumen-crash
