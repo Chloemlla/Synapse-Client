@@ -10,6 +10,8 @@ import android.net.Uri
 import android.content.ClipData
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -850,6 +852,29 @@ private fun LoginPanel(
                     val context = LocalContext.current
                     val activity = remember(context) { context.findActivity() }
                     val googleClient = remember(context) { SynapseGoogleCredentialClient(context) }
+                    // Credential Manager 三条路径都没拿到凭据时，由这里拉起系统登录窗口。
+                    val googleWindowLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.StartActivityForResult(),
+                    ) { result ->
+                        viewModel.completeGoogleSignInWithWindow(googleClient, result.data)
+                    }
+                    val pendingGoogleClientId = state.googleInteractiveSignInClientId
+                    LaunchedEffect(pendingGoogleClientId) {
+                        val clientId = pendingGoogleClientId ?: return@LaunchedEffect
+                        val launched = runCatching {
+                            googleWindowLauncher.launch(googleClient.interactiveSignInIntent(context, clientId))
+                        }
+                        viewModel.consumeGoogleInteractiveSignIn()
+                        launched.onFailure { error ->
+                            viewModel.reportGoogleSignInWindowUnavailable(
+                                SynapseFailureMessage.from(
+                                    error = error,
+                                    fallback = "无法打开 Google 登录窗口。",
+                                    context = "Google window",
+                                ),
+                            )
+                        }
+                    }
                     OutlinedButton(
                         onClick = {
                             val host = activity ?: return@OutlinedButton

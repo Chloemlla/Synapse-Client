@@ -2,6 +2,8 @@ package com.chloemlla.synapse.mobile.core.auth
 
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
+import android.content.MutableContextWrapper
 import androidx.credentials.Credential
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
@@ -11,212 +13,181 @@ import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.tasks.Tasks
+import com.google.android.gms.common.api.ApiException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.concurrent.TimeUnit
+
+/**
+ * Credential Manager 的三条路径都没拿到凭据，但还有救：需要界面层用 ActivityResult 拉起
+ * 系统 Google 登录窗口（交互式），拿到 idToken 后回传 [SynapseGoogleCredentialClient.idTokenFromInteractiveResult]。
+ *
+ * 抛这个异常不代表登录失败，也不代表账号有问题。
+ */
+class GoogleInteractiveSignInRequired(
+    val serverClientId: String,
+    detail: String,
+    cause: Throwable?,
+) : IllegalStateException(detail, cause)
 
 /**
  * Android Credential Manager adapter for Sign in with Google (SIWG).
  *
- * Flow (Google SIWG docs + Happy-TTS `/api/auth/google*`):
- * 1. Load server Web Client ID from `GET /api/auth/google/config`
- * 2. Call Credential Manager with Google ID option / SIWG button option
- * 3. Extract Google ID token and POST to Happy-TTS for JWT
+ * 顺序按官方指引（developer.android.com/identity/sign-in/credential-manager-siwg-implementation）：
+ * 1) `GetGoogleIdOption(filterByAuthorizedAccounts = true)` —— 已授权账号，可自动登录
+ * 2) `GetGoogleIdOption(filterByAuthorizedAccounts = false)` —— 设备上全部 Google 账号
+ * 3) `GetSignInWithGoogleOption` —— 按钮流，覆盖"弹窗被跳过 / 需要重新验证 / 登录提示被关闭"
+ * 4) 仍然不行 → [GoogleInteractiveSignInRequired]，由界面层走系统登录窗口
  */
 class SynapseGoogleCredentialClient(
     context: Context,
     private val credentialManager: CredentialManager = CredentialManager.create(context.applicationContext),
 ) {
+    private enum class CmStrategy {
+        AuthorizedAccounts,
+        AllDeviceAccounts,
+        SignInWithGoogleButton,
+    }
+
     /**
-     * Tries authorized Google accounts first (bottom sheet), then widens to all
-     * device Google accounts, then falls back to the full Sign in with Google
-     * button flow, and finally attempts a browser-based GoogleSignInClient
-     * fallback. Account reauth failures (code 16) are treated as recoverable
-     * for earlier steps so a stale authorized account does not hard-fail SIWG.
+     * 依次尝试 Credential Manager 的三条路径；任何一条抛异常都不再提前放弃后面的策略。
+     *
+     * 用户主动取消不自动重试（官方明确要求），直接以取消文案结束。
      */
     suspend fun getGoogleIdToken(
         activity: Activity,
         serverClientId: String,
-        filterByAuthorizedAccounts: Boolean = true,
     ): String = withContext(Dispatchers.Main.immediate) {
         require(!activity.isFinishing && !activity.isDestroyed) {
-            "Activity 不可用，无法唤起 Google 登录。"
+            "当前界面已关闭，请重新发起 Google 登录。"
         }
         val cleanClientId = serverClientId.trim()
-        require(cleanClientId.isNotBlank()) { "缺少 Google serverClientId。" }
+        require(cleanClientId.isNotBlank()) { "Google 登录暂不可用，请稍后重试。" }
 
-        val steps = buildList<suspend () -> String> {
-            if (filterByAuthorizedAccounts) {
-                add {
-                    requestGoogleIdToken(
-                        activity = activity,
-                        serverClientId = cleanClientId,
-                        filterByAuthorizedAccounts = true,
-                        autoSelectEnabled = false,
-                    )
-                }
-            }
-            add {
-                requestGoogleIdToken(
-                    activity = activity,
-                    serverClientId = cleanClientId,
-                    filterByAuthorizedAccounts = false,
-                    autoSelectEnabled = false,
-                )
-            }
-            add {
-                requestSignInWithGoogleButton(
-                    activity = activity,
-                    serverClientId = cleanClientId,
-                )
-            }
-            // Browser-based fallback: GoogleSignInClient bypasses Credential
-            // Manager entirely, so it is not affected by account reauth failures
-            // (code 16) that block all Credential Manager paths.
-            add {
-                requestGoogleSignInClientFallback(
-                    activity = activity,
-                    serverClientId = cleanClientId,
-                )
-            }
-        }
+        val strategies = CmStrategy.entries
+        var lastError: GetCredentialException? = null
+        var lastSummary: String? = null
 
-        var lastRecoverableError: GetCredentialException? = null
-        for ((index, requestStep) in steps.withIndex()) {
-            val hasRemainingFallback = index < steps.lastIndex
+        for (strategy in strategies) {
             try {
-                return@withContext requestStep()
-            } catch (error: NoCredentialException) {
-                lastRecoverableError = error
-                if (!hasRemainingFallback) {
-                    throw IllegalStateException(
-                        "未找到可用的 Google 账号。请确认设备已登录 Google 账号，并安装/更新 Google Play 服务。",
-                        error,
-                    )
+                return@withContext requestIdToken(activity, cleanClientId, strategy)
+            } catch (cancel: GetCredentialCancellationException) {
+                lastError = cancel
+                val systemMessage = cancel.errorMessage?.toString()
+                lastSummary = SynapseCredentialErrorMapper.cancellationSummary(
+                    systemMessage = systemMessage,
+                    actionLabel = "Google 登录",
+                )
+                // 技术性取消（账号需要重新验证）继续往下走：后面还有按钮流和系统窗口；
+                // 用户主动取消不自动重试（官方明确要求）。
+                val retry = SynapseCredentialErrorMapper.shouldRetryAfterCancellation(
+                    systemMessage = systemMessage,
+                    hasRemainingFallback = true,
+                )
+                if (!retry) {
+                    throw IllegalStateException(mapCancellationError(cancel, actionLabel = "Google 登录"), cancel)
                 }
-            } catch (error: GetCredentialCancellationException) {
-                val systemMessage = error.errorMessage?.toString()
-                if (
-                    SynapseCredentialErrorMapper.shouldRetryAfterCancellation(
-                        systemMessage = systemMessage,
-                        hasRemainingFallback = hasRemainingFallback,
-                    )
-                ) {
-                    lastRecoverableError = error
-                    continue
-                }
-                throw IllegalStateException(mapCancellationError(error, actionLabel = "Google 登录"), error)
-            } catch (error: GetCredentialException) {
-                throw IllegalStateException(mapGetCredentialError(error), error)
+            } catch (noCredential: NoCredentialException) {
+                lastError = noCredential
+                lastSummary = SynapseCredentialErrorMapper.noCredentialSummary()
+            } catch (failure: GetCredentialException) {
+                lastError = failure
+                lastSummary = mapGetCredentialError(failure)
             }
         }
 
-        // Defensive: loop always returns or throws when steps is non-empty.
-        val fallbackError = lastRecoverableError
-        if (fallbackError is GetCredentialCancellationException) {
-            throw IllegalStateException(
-                mapCancellationError(fallbackError, actionLabel = "Google 登录"),
-                fallbackError,
-            )
-        }
-        if (fallbackError is NoCredentialException) {
-            throw IllegalStateException(
-                "未找到可用的 Google 账号。请确认设备已登录 Google 账号，并安装/更新 Google Play 服务。",
-                fallbackError,
-            )
-        }
-        throw IllegalStateException("Google 登录失败：未返回凭据。", fallbackError)
-    }
-
-    private suspend fun requestGoogleIdToken(
-        activity: Activity,
-        serverClientId: String,
-        filterByAuthorizedAccounts: Boolean,
-        autoSelectEnabled: Boolean,
-    ): String {
-        val googleIdOption = GetGoogleIdOption.Builder()
-            .setFilterByAuthorizedAccounts(filterByAuthorizedAccounts)
-            .setServerClientId(serverClientId)
-            .setAutoSelectEnabled(autoSelectEnabled)
-            .build()
-        val request = GetCredentialRequest.Builder()
-            .addCredentialOption(googleIdOption)
-            .build()
-        return extractIdToken(
-            credentialManager.getCredential(
-                context = activity,
-                request = request,
-            ).credential,
-        )
-    }
-
-    private suspend fun requestSignInWithGoogleButton(
-        activity: Activity,
-        serverClientId: String,
-    ): String {
-        val signInOption = GetSignInWithGoogleOption.Builder(serverClientId).build()
-        val request = GetCredentialRequest.Builder()
-            .addCredentialOption(signInOption)
-            .build()
-        return extractIdToken(
-            credentialManager.getCredential(
-                context = activity,
-                request = request,
-            ).credential,
+        throw GoogleInteractiveSignInRequired(
+            serverClientId = cleanClientId,
+            detail = lastSummary ?: "Google 登录未完成。",
+            cause = lastError,
         )
     }
 
     /**
-     * Browser-based fallback using GoogleSignInClient. Uses silentSignIn() to
-     * attempt a non-interactive token refresh. GoogleSignInClient bypasses the
-     * Credential Manager entirely, so it is not affected by account reauth
-     * failures (code 16) that block all Credential Manager paths.
+     * 交互式 Google 登录窗口的入口 Intent。交给 `ActivityResultContracts.StartActivityForResult`
+     * 启动，结果用 [idTokenFromInteractiveResult] 解析。
      *
-     * If silentSignIn() fails (e.g. the account needs interactive re-auth),
-     * the error message guides the user to re-add their Google account in
-     * system settings, which is the only reliable client-side fix.
-     *
-     * GoogleSignIn and GoogleSignInOptions are deprecated in the latest Play
-     * Services but remain the only reliable fallback when Credential Manager
-     * cannot recover from account reauth failures (code 16).
+     * GoogleSignIn 在最新版本里已被 Credential Manager 取代，但它是官方给出的、
+     * Credential Manager 无法恢复时的交互式回退路径（`SIGN_IN_REQUIRED` 的正确处置方式）。
      */
     @Suppress("DEPRECATION")
-    private suspend fun requestGoogleSignInClientFallback(
-        activity: Activity,
-        serverClientId: String,
-    ): String = withContext(Dispatchers.IO) {
-        val gso = GoogleSignInOptions.Builder()
-            .requestIdToken(serverClientId)
-            .requestEmail()
-            .build()
-        val googleSignInClient = GoogleSignIn.getClient(activity, gso)
+    fun interactiveSignInIntent(context: Context, serverClientId: String): Intent =
+        GoogleSignIn.getClient(
+            context,
+            GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(serverClientId.trim())
+                .requestEmail()
+                .build(),
+        ).signInIntent
 
-        val account = try {
-            Tasks.await(googleSignInClient.silentSignIn(), 30, TimeUnit.SECONDS)
-        } catch (e: java.util.concurrent.TimeoutException) {
+    /** 解析 [interactiveSignInIntent] 的返回结果；失败时给出与状态码对应的可执行结论。 */
+    @Suppress("DEPRECATION")
+    fun idTokenFromInteractiveResult(data: Intent?): String {
+        if (data == null) {
+            throw IllegalStateException("已取消 Google 登录。")
+        }
+        val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+        val error = task.exception
+        if (!task.isSuccessful || error != null) {
+            val statusCode = (error as? ApiException)?.statusCode
             throw IllegalStateException(
-                "Google 登录超时。请检查网络连接后重试。",
-                e,
-            )
-        } catch (e: Exception) {
-            // Interactive sign-in via getSignInIntent() would require the
-            // ActivityResultLauncher pattern, which is not available in this
-            // context. Instead, guide the user to the system-level fix.
-            throw IllegalStateException(
-                "Google 登录需要重新验证账号。请前往系统设置 → Google → 管理账号，\n" +
-                    "移除并重新添加此 Google 账号，然后重新尝试登录。\n" +
-                    "（异常：${e.message?.take(120) ?: e::class.java.simpleName}）",
-                e,
+                SynapseCredentialErrorMapper.googleWindowFailure(
+                    statusCode = statusCode,
+                    systemMessage = error?.message?.toString()?.takeIf { it.isNotBlank() },
+                ),
+                error,
             )
         }
-        val idToken = account.idToken?.trim()
-        require(!idToken.isNullOrBlank()) { "Google Sign-In 未返回有效 idToken。" }
-        idToken
+        val idToken = task.result?.idToken?.trim().orEmpty()
+        if (idToken.isBlank()) {
+            throw IllegalStateException("Google 登录未完成，请重试或改用账号密码登录。")
+        }
+        return idToken
+    }
+
+    private suspend fun requestIdToken(
+        activity: Activity,
+        serverClientId: String,
+        strategy: CmStrategy,
+    ): String {
+        val request = when (strategy) {
+            CmStrategy.AuthorizedAccounts -> GetCredentialRequest.Builder()
+                .addCredentialOption(
+                    GetGoogleIdOption.Builder()
+                        .setFilterByAuthorizedAccounts(true)
+                        .setServerClientId(serverClientId)
+                        .setAutoSelectEnabled(true)
+                        .build(),
+                )
+                .build()
+
+            CmStrategy.AllDeviceAccounts -> GetCredentialRequest.Builder()
+                .addCredentialOption(
+                    GetGoogleIdOption.Builder()
+                        .setFilterByAuthorizedAccounts(false)
+                        .setServerClientId(serverClientId)
+                        .setAutoSelectEnabled(false)
+                        .build(),
+                )
+                .build()
+
+            CmStrategy.SignInWithGoogleButton -> GetCredentialRequest.Builder()
+                .addCredentialOption(
+                    GetSignInWithGoogleOption.Builder(serverClientId = serverClientId).build(),
+                )
+                .build()
+        }
+
+        return extractIdToken(
+            credentialManager.getCredential(
+                request = request,
+                // 官方：用前台 Activity 包一层 MutableContextWrapper，避免配置变更时窗口行为不确定。
+                context = MutableContextWrapper(activity),
+            ).credential,
+        )
     }
 
     private fun extractIdToken(credential: Credential): String {
@@ -229,7 +200,7 @@ class SynapseGoogleCredentialClient(
                     require(idToken.isNotBlank()) { "Google 登录未返回有效 idToken。" }
                     idToken
                 } catch (error: GoogleIdTokenParsingException) {
-                    throw IllegalStateException("无法解析 Google ID Token。", error)
+                    throw IllegalStateException("无法解析 Google ID Token。请更新 Google Play 服务后重试。", error)
                 }
             }
             else -> throw IllegalStateException(
@@ -261,6 +232,7 @@ class SynapseGoogleCredentialClient(
         val type = error.type.orEmpty()
         val message = error.errorMessage?.toString()?.takeIf { it.isNotBlank() }
         val summary = when {
+            error is NoCredentialException -> SynapseCredentialErrorMapper.noCredentialSummary()
             type.contains("CANCELED", ignoreCase = true) ||
                 error is GetCredentialCancellationException ->
                 SynapseCredentialErrorMapper.cancellationSummary(
@@ -268,14 +240,13 @@ class SynapseGoogleCredentialClient(
                     actionLabel = "Google 登录",
                 )
             type.contains("NO_CREDENTIAL", ignoreCase = true) ->
-                "未找到可用的 Google 账号。请确认设备已登录 Google 账号。"
+                SynapseCredentialErrorMapper.noCredentialSummary()
             type.contains("INTERRUPTED", ignoreCase = true) -> "Google 登录被中断，请重试。"
             type.contains("PROVIDER_CONFIGURATION", ignoreCase = true) ->
                 "Google 登录提供方未就绪。请安装/更新 Google Play 服务，并确认设备支持 Credential Manager。"
             type.contains("UNSUPPORTED", ignoreCase = true) ->
-                "当前设备或系统不支持 Google Credential Manager 登录。"
-            !message.isNullOrBlank() -> "Google 登录失败：$message"
-            else -> "Google 登录失败：${error::class.java.simpleName}"
+                "当前设备或系统版本不支持 Credential Manager 的 Google 登录，请使用其它登录方式。"
+            else -> SynapseCredentialErrorMapper.googleFailureSummary(message)
         }
         return SynapseFailureMessage.withDetails(
             summary = summary,

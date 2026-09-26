@@ -36,6 +36,8 @@ data class SynapseUiState(
     val googleAuthConfig: GoogleAuthConfig = GoogleAuthConfig(enabled = false, clientIdConfigured = false, clientId = null),
     val googleAuthConfigLoading: Boolean = true,
     val googleAuthConfigError: String? = null,
+    // 非空表示 Credential Manager 拿不到凭据，界面层需要拉起系统登录窗口接手。
+    val googleInteractiveSignInClientId: String? = null,
     val linuxDoAuthConfig: LinuxDoAuthConfig = LinuxDoAuthConfig(enabled = false, clientIdConfigured = false, callbackUrl = null, frontendCallbackUrl = null, discoveryUrl = null, scopes = null),
     val linuxDoAuthConfigLoading: Boolean = true,
     val linuxDoAuthConfigError: String? = null,

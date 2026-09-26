@@ -115,7 +115,7 @@ API 地址：https://chloemlla.com
 6. Discoverable 场景把 assertion 发到 `POST /api/passkey/authenticate/finish/discoverable`（含 `response`、可选 `challenge`、`clientOrigin`）。
 7. 收到正式 JWT 后加密保存，并立即调用 `/api/auth/mobile-login/client-token/issue`。
 
-界面只应展示 challenge 是否已返回、`rpId`、credential 数量与 `userVerification`，不要完整展示 challenge 或 credential id。
+界面不展示 challenge 是否已返回、`rpId`、credential 数量与 `userVerification` 这些协议字段，也不完整展示 challenge 或 credential id；只告诉用户系统窗口已弹出、未弹出可重试。
 
 应用需与 RP 域名完成 Digital Asset Links 关联后，本机保存的通行密钥才能被 Credential Manager 发现。
 
@@ -150,7 +150,7 @@ API 地址：https://chloemlla.com
 }
 ```
 
-`options` 是 WebAuthn 认证选项，交给浏览器 Passkey API 或原生 Credential Manager 适配层使用。界面可显示是否已获取 challenge、`rpId`、credential 数量和 `userVerification`，不要完整展示 challenge 或 credential id。
+`options` 是 WebAuthn 认证选项，交给浏览器 Passkey API 或原生 Credential Manager 适配层使用；这些字段不得展示到界面，也不要完整展示 challenge 或 credential id。
 
 ### Passkey 完成认证
 
@@ -264,10 +264,20 @@ synapse://mobile-login?sessionId=<sessionId>&scanToken=<scanToken>&apiBaseUrl=<a
 推荐流程：
 
 1. 调用 `GET /api/auth/google/config?client=synapse-android` 读取是否启用与 Web `clientId`（即 Credential Manager 的 `serverClientId`）；服务端未配置专用值时回退主站 Client ID。
-2. 使用 `GetGoogleIdOption`（可先 `filterByAuthorizedAccounts=true`，无凭据再放宽或改用 `GetSignInWithGoogleOption`）调用 `CredentialManager.getCredential()`。若某一步返回 `Account reauth failed` / code 16，应继续下一档账号选择而不是立刻失败；真正的用户取消则立即停止。
-3. 从 `GoogleIdTokenCredential` 取出 `idToken`。
-4. 优先 `POST /api/auth/google/bind-session`（与网页端一致）。若返回 `requiresBinding=true`，移动端无绑定 UI 时改为 `POST /api/auth/google` 完成自动建号/关联。
-5. 收到正式 JWT 后加密保存，并立即调用 `/api/auth/mobile-login/client-token/issue`。
+2. 使用 `GetGoogleIdOption`（先 `filterByAuthorizedAccounts=true` + `setAutoSelectEnabled(true)`，无凭据再放宽到设备上全部账号，最后改用 `GetSignInWithGoogleOption`）调用 `CredentialManager.getCredential()`；`getCredential()` 的 context 必须是前台 Activity 包一层 `MutableContextWrapper`。若某一步返回 `Account reauth failed` / code 16，应继续下一档账号选择而不是立刻失败；真正的用户取消则立即停止。
+3. 三条路径都拿不到凭据时，走交互式回退：`GoogleSignIn.getClient(ctx, GoogleSignInOptions.Builder(DEFAULT_SIGN_IN).requestIdToken(serverClientId).requestEmail()).signInIntent`，由界面层用 `ActivityResultLauncher` 拉起，再用 `GoogleSignIn.getSignedInAccountFromIntent()` 取 `idToken`。**不得用 `silentSignIn()` 做兜底** —— 首次登录必然返回 `SIGN_IN_REQUIRED(4)`。
+4. 从 `GoogleIdTokenCredential` 取出 `idToken`。
+5. 优先 `POST /api/auth/google/bind-session`（与网页端一致）。若返回 `requiresBinding=true`，移动端无绑定 UI 时改为 `POST /api/auth/google` 完成自动建号/关联。
+6. 收到正式 JWT 后加密保存，并立即调用 `/api/auth/mobile-login/client-token/issue`。
+
+错误处理约束（对照官方文档，不得自创成因）：
+
+- `NoCredentialException` 的官方成因只有三类：只筛已授权账号且无授权记录、设备上没有已登录账号或账号需要重新登录、以及 Google 账号里关闭了“使用 Google 账号登录”登录提示（后者不影响按钮流）。
+- `TransactionTooLargeException`（Android 14+ 多账号 + `GetGoogleIdOption` 弹不出窗口）在 Google Play 服务 24.40.XX+ 修复，`GetSignInWithGoogleOption` 不受影响。
+- `ApiException` 状态码按 `CommonStatusCodes` 解释：`4 = SIGN_IN_REQUIRED`（需要交互登录，不是账号坏了）、`16 = CANCELED`、`10 = DEVELOPER_ERROR`（Web Client ID / SHA-1 配置错）、`7 = NETWORK_ERROR`。
+- 界面上**禁止**出现“去系统设置移除并重新添加 Google 账号”一类建议；其它 App 能正常用该账号就说明账号本身没问题。
+
+官方参考：[Implement Sign in with Google](https://developer.android.com/identity/sign-in/credential-manager-siwg-implementation)、[Troubleshoot common Credential Manager errors](https://developer.android.com/identity/sign-in/credential-manager-troubleshooting-guide)、[CommonStatusCodes](https://developers.google.com/android/reference/com/google/android/gms/common/api/CommonStatusCodes)。
 
 依赖：`androidx.credentials:credentials`、`androidx.credentials:credentials-play-services-auth`、`com.google.android.libraries.identity.googleid:googleid`。设备需具备可用的 Google 账号与 Google Play 服务。
 

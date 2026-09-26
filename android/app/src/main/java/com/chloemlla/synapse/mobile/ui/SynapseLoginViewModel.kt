@@ -12,6 +12,7 @@ import com.chloemlla.synapse.mobile.core.auth.SynapseAuthRepository
 import com.chloemlla.synapse.mobile.core.auth.SynapseFailureMessage
 import com.chloemlla.synapse.mobile.core.auth.SynapsePasskeyJson
 import com.chloemlla.synapse.mobile.core.auth.SynapsePasskeyCredentialClient
+import com.chloemlla.synapse.mobile.core.auth.GoogleInteractiveSignInRequired
 import com.chloemlla.synapse.mobile.core.auth.SynapseGoogleCredentialClient
 import com.chloemlla.synapse.mobile.core.auth.SynapseLinuxDoCallbackParser
 import com.chloemlla.synapse.mobile.core.auth.LinuxDoAuthConfig
@@ -1081,55 +1082,96 @@ class SynapseLoginViewModel(
         googleClient: SynapseGoogleCredentialClient,
     ) {
         launchAction {
-            val config = mutableState.value.googleAuthConfig
-            val clientId = config.clientId?.takeIf { it.isNotBlank() }
-            if (!config.canSignIn || clientId == null) {
-                // Refresh once in case config was not loaded yet.
-                val refreshed = repository.getGoogleAuthConfig()
-                mutableState.update {
-                    it.copy(
-                        googleAuthConfig = refreshed,
-                        googleAuthConfigLoading = false,
-                        googleAuthConfigError = null,
-                    )
-                }
-                if (!refreshed.canSignIn || refreshed.clientId.isNullOrBlank()) {
-                    throw IllegalStateException(
-                        refreshed.let { cfg ->
-                            when {
-                                !cfg.enabled -> "Google 登录暂不可用。"
-                                !cfg.clientIdConfigured || cfg.clientId.isNullOrBlank() -> "Google 登录暂不可用，请稍后重试。"
-                                else -> "Google 登录不可用。"
-                            }
-                        },
-                    )
-                }
-            }
-            val serverClientId = mutableState.value.googleAuthConfig.clientId
-                ?.takeIf { it.isNotBlank() }
-                ?: throw IllegalStateException("缺少 Google Client ID。")
-            val idToken = googleClient.getGoogleIdToken(
-                activity = activity,
-                serverClientId = serverClientId,
-            )
-            val outcome = repository.signInWithGoogleIdToken(
-                idToken = idToken,
-                deviceName = mutableState.value.deviceName,
-            )
-            mutableState.update {
-                it.copy(
-                    credentials = repository.credentials(),
-                    pendingTwoFactorChallenge = null,
-                    passkeyOptions = null,
-                    passkeyChallenge = null,
-                    passkeyAssertionJson = "",
-                    password = "",
+            val serverClientId = resolveGoogleServerClientId()
+            val idToken = try {
+                googleClient.getGoogleIdToken(
+                    activity = activity,
+                    serverClientId = serverClientId,
                 )
+            } catch (needsWindow: GoogleInteractiveSignInRequired) {
+                // 标记待办，交给界面层用 ActivityResult 拉起系统登录窗口。
+                mutableState.update { it.copy(googleInteractiveSignInClientId = needsWindow.serverClientId) }
+                return@launchAction "正在打开 Google 登录窗口…"
             }
-            val name = outcome.user?.username ?: outcome.user?.email ?: "当前账号"
-            "Google 登录成功。当前账号：$name"
+            finishGoogleSignIn(idToken)
         }
     }
+
+    private suspend fun resolveGoogleServerClientId(): String {
+        val config = mutableState.value.googleAuthConfig
+        val clientId = config.clientId?.takeIf { it.isNotBlank() }
+        if (!config.canSignIn || clientId == null) {
+            // Refresh once in case config was not loaded yet.
+            val refreshed = repository.getGoogleAuthConfig()
+            mutableState.update {
+                it.copy(
+                    googleAuthConfig = refreshed,
+                    googleAuthConfigLoading = false,
+                    googleAuthConfigError = null,
+                )
+            }
+            if (!refreshed.canSignIn || refreshed.clientId.isNullOrBlank()) {
+                throw IllegalStateException(
+                    refreshed.let { cfg ->
+                        when {
+                            !cfg.enabled -> "Google 登录暂不可用。"
+                            !cfg.clientIdConfigured || cfg.clientId.isNullOrBlank() -> "Google 登录暂不可用，请稍后重试。"
+                            else -> "Google 登录不可用。"
+                        }
+                    },
+                )
+            }
+        }
+        return mutableState.value.googleAuthConfig.clientId
+            ?.takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("Google 登录暂不可用，请稍后重试。")
+    }
+
+    private suspend fun finishGoogleSignIn(idToken: String): String {
+        val outcome = repository.signInWithGoogleIdToken(
+            idToken = idToken,
+            deviceName = mutableState.value.deviceName,
+        )
+        mutableState.update {
+            it.copy(
+                credentials = repository.credentials(),
+                pendingTwoFactorChallenge = null,
+                passkeyOptions = null,
+                passkeyChallenge = null,
+                passkeyAssertionJson = "",
+                password = "",
+            )
+        }
+        val name = outcome.user?.username ?: outcome.user?.email ?: "当前账号"
+        return "Google 登录成功。当前账号：$name"
+    }
+
+    /** 系统登录窗口已拉起，清掉待办标记，避免重复弹出。 */
+    fun consumeGoogleInteractiveSignIn() {
+        mutableState.update { it.copy(googleInteractiveSignInClientId = null) }
+    }
+
+    fun reportGoogleSignInWindowUnavailable(message: String) {
+        consumeGoogleInteractiveSignIn()
+        mutableState.update {
+            it.copy(
+                error = message.ifBlank { "无法打开 Google 登录窗口。" },
+                status = "",
+            )
+        }
+    }
+
+    /** 系统登录窗口关闭后回传结果（data 为空表示用户取消）。 */
+    fun completeGoogleSignInWithWindow(
+        googleClient: SynapseGoogleCredentialClient,
+        data: Intent?,
+    ) {
+        consumeGoogleInteractiveSignIn()
+        launchAction {
+            finishGoogleSignIn(googleClient.idTokenFromInteractiveResult(data))
+        }
+    }
+
     fun silentLogin() {
         launchAction {
             val result = repository.silentLogin()
