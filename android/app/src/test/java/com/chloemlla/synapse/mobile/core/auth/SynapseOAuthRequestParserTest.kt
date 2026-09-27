@@ -9,14 +9,14 @@ import org.junit.Test
 class SynapseOAuthRequestParserTest {
     private val challenge = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~"
     private val validUri = """
-        synapse://oauth/authorize?provider_origin=https%3A%2F%2Ftts.chloemlla.com&response_type=code&client_id=syn_client_demo&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=openid%20profile&state=state-123&code_challenge=$challenge&code_challenge_method=S256
+        synapse://oauth/authorize?provider_origin=https%3A%2F%2Fchloemlla.com&response_type=code&client_id=syn_client_demo&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=openid%20profile&state=state-123&code_challenge=$challenge&code_challenge_method=S256
     """.trimIndent()
 
     @Test
     fun parsesAndNormalizesTrustedAuthorizationRequest() {
         val request = SynapseOAuthRequestParser.parse(validUri, "https://TTS.CHLOEMLLA.COM/")
 
-        assertEquals("https://tts.chloemlla.com", request.providerOrigin)
+        assertEquals("https://chloemlla.com", request.providerOrigin)
         assertEquals("syn_client_demo", request.clientId)
         assertEquals(listOf("openid", "profile"), request.scopes)
         assertEquals("state-123", request.state)
@@ -32,7 +32,7 @@ class SynapseOAuthRequestParserTest {
                 "redirect_uri=piliplus%3A%2F%2Fsynapse-auth",
             )
 
-        val request = SynapseOAuthRequestParser.parse(piliplusUri, "https://tts.chloemlla.com")
+        val request = SynapseOAuthRequestParser.parse(piliplusUri, "https://chloemlla.com")
 
         assertEquals("piliplus", request.clientId)
         assertEquals("piliplus://synapse-auth", request.redirectUri)
@@ -42,12 +42,12 @@ class SynapseOAuthRequestParserTest {
     fun rejectsNonHttpsProviderAndNonCodeResponseTypes() {
         assertThrows(SynapseOAuthRequestException::class.java) {
             SynapseOAuthRequestParser.parse(
-                validUri.replace("https%3A%2F%2Ftts.chloemlla.com", "http%3A%2F%2Ftts.chloemlla.com"),
-                "https://tts.chloemlla.com",
+                validUri.replace("https%3A%2F%2Fchloemlla.com", "http%3A%2F%2Fchloemlla.com"),
+                "https://chloemlla.com",
             )
         }
         assertThrows(SynapseOAuthRequestException::class.java) {
-            SynapseOAuthRequestParser.parse(validUri.replace("response_type=code", "response_type=token"), "https://tts.chloemlla.com")
+            SynapseOAuthRequestParser.parse(validUri.replace("response_type=code", "response_type=token"), "https://chloemlla.com")
         }
     }
 
@@ -56,7 +56,7 @@ class SynapseOAuthRequestParserTest {
         val tokenUri = "$validUri&access_token=eyJhbGciOiJIUzI1NiJ9.payload.signature"
 
         assertThrows(SynapseOAuthRequestException::class.java) {
-            SynapseOAuthRequestParser.parse(tokenUri, "https://tts.chloemlla.com")
+            SynapseOAuthRequestParser.parse(tokenUri, "https://chloemlla.com")
         }
     }
 
@@ -68,17 +68,17 @@ class SynapseOAuthRequestParserTest {
         )
 
         assertThrows(SynapseOAuthRequestException::class.java) {
-            SynapseOAuthRequestParser.parse(redirectWithToken, "https://tts.chloemlla.com")
+            SynapseOAuthRequestParser.parse(redirectWithToken, "https://chloemlla.com")
         }
     }
 
     @Test
     fun requiresS256PkceAndState() {
         assertThrows(SynapseOAuthRequestException::class.java) {
-            SynapseOAuthRequestParser.parse(validUri.replace("code_challenge_method=S256", "code_challenge_method=plain"), "https://tts.chloemlla.com")
+            SynapseOAuthRequestParser.parse(validUri.replace("code_challenge_method=S256", "code_challenge_method=plain"), "https://chloemlla.com")
         }
         assertThrows(SynapseOAuthRequestException::class.java) {
-            SynapseOAuthRequestParser.parse(validUri.replace("state=state-123&", ""), "https://tts.chloemlla.com")
+            SynapseOAuthRequestParser.parse(validUri.replace("state=state-123&", ""), "https://chloemlla.com")
         }
     }
 

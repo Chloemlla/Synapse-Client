@@ -8,7 +8,7 @@ class SynapseApiOriginPolicyTest {
     @Test
     fun normalizeHttpsOriginKeepsOnlyTrustedOriginParts() {
         assertEquals(
-            "https://tts.chloemlla.com:8443",
+            "https://chloemlla.com:8443",
             SynapseApiOriginPolicy.normalizeHttpsOrigin("HTTPS://TTS.CHLOEMLLA.COM:8443/"),
         )
     }
@@ -16,13 +16,13 @@ class SynapseApiOriginPolicyTest {
     @Test
     fun normalizeHttpsOriginRejectsUnsafeOrigins() {
         assertThrows(IllegalArgumentException::class.java) {
-            SynapseApiOriginPolicy.normalizeHttpsOrigin("http://tts.chloemlla.com")
+            SynapseApiOriginPolicy.normalizeHttpsOrigin("http://chloemlla.com")
         }
         assertThrows(IllegalArgumentException::class.java) {
-            SynapseApiOriginPolicy.normalizeHttpsOrigin("https://user:pass@tts.chloemlla.com")
+            SynapseApiOriginPolicy.normalizeHttpsOrigin("https://user:pass@chloemlla.com")
         }
         assertThrows(IllegalArgumentException::class.java) {
-            SynapseApiOriginPolicy.normalizeHttpsOrigin("https://tts.chloemlla.com/api")
+            SynapseApiOriginPolicy.normalizeHttpsOrigin("https://chloemlla.com/api")
         }
     }
 
@@ -31,7 +31,7 @@ class SynapseApiOriginPolicyTest {
         assertThrows(IllegalArgumentException::class.java) {
             SynapseApiOriginPolicy.requireTrustedOrigin(
                 candidateOrigin = "https://evil.example",
-                trustedOrigin = "https://tts.chloemlla.com",
+                trustedOrigin = "https://chloemlla.com",
             )
         }
     }

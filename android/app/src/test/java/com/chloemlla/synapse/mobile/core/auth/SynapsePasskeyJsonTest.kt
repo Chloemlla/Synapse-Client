@@ -13,7 +13,7 @@ class SynapsePasskeyJsonTest {
             """
             {
               "challenge": "challenge-value",
-              "rpId": "tts.chloemlla.com",
+              "rpId": "chloemlla.com",
               "allowCredentials": [
                 { "id": "credential-1", "type": "public-key", "transports": ["internal"] }
               ],
@@ -25,7 +25,7 @@ class SynapsePasskeyJsonTest {
         val request = JSONObject(requestJson)
 
         assertEquals("challenge-value", request.getString("challenge"))
-        assertEquals("tts.chloemlla.com", request.getString("rpId"))
+        assertEquals("chloemlla.com", request.getString("rpId"))
         assertEquals("required", request.getString("userVerification"))
         assertEquals(1, request.getJSONArray("allowCredentials").length())
         assertEquals("credential-1", request.getJSONArray("allowCredentials").getJSONObject(0).getString("id"))
@@ -37,7 +37,7 @@ class SynapsePasskeyJsonTest {
             """
             {
               "challenge": "discoverable-challenge",
-              "rpId": "tts.chloemlla.com",
+              "rpId": "chloemlla.com",
               "userVerification": "required"
             }
             """.trimIndent(),
@@ -56,7 +56,7 @@ class SynapsePasskeyJsonTest {
             {
               "publicKey": {
                 "challenge": "nested-challenge",
-                "rpID": "tts.chloemlla.com",
+                "rpID": "chloemlla.com",
                 "userVerification": "preferred"
               }
             }
@@ -65,7 +65,7 @@ class SynapsePasskeyJsonTest {
         val request = JSONObject(requestJson)
 
         assertEquals("nested-challenge", request.getString("challenge"))
-        assertEquals("tts.chloemlla.com", request.getString("rpId"))
+        assertEquals("chloemlla.com", request.getString("rpId"))
         assertEquals("preferred", request.getString("userVerification"))
     }
 
@@ -110,7 +110,7 @@ class SynapsePasskeyJsonTest {
             """
             {
               "challenge": "super-secret-challenge",
-              "rpId": "tts.chloemlla.com",
+              "rpId": "chloemlla.com",
               "allowCredentials": [{ "id": "credential-1" }],
               "userVerification": "required"
             }

@@ -88,7 +88,7 @@ class JsonMappingsTest {
             {
               "options": {
                 "challenge": "challenge-value",
-                "rpId": "tts.chloemlla.com",
+                "rpId": "chloemlla.com",
                 "allowCredentials": [{ "id": "credential-1" }, { "id": "credential-2" }],
                 "userVerification": "required"
               }
@@ -97,7 +97,7 @@ class JsonMappingsTest {
         ).toPasskeyAuthenticationStartResult()
 
         assertTrue(result.options.hasChallenge)
-        assertEquals("tts.chloemlla.com", result.options.rpId)
+        assertEquals("chloemlla.com", result.options.rpId)
         assertEquals(2, result.options.allowCredentialCount)
         assertEquals("required", result.options.userVerification)
     }
@@ -253,7 +253,7 @@ class JsonMappingsTest {
             {
               "options": {
                 "challenge": "discoverable-challenge",
-                "rpId": "tts.chloemlla.com",
+                "rpId": "chloemlla.com",
                 "userVerification": "required"
               },
               "challenge": "discoverable-challenge"
@@ -351,8 +351,8 @@ class JsonMappingsTest {
             {
               "enabled": true,
               "clientIdConfigured": true,
-              "callbackUrl": "https://tts.chloemlla.com/api/auth/linuxdo/callback",
-              "frontendCallbackUrl": "https://tts.chloemlla.com/auth/linuxdo/callback",
+              "callbackUrl": "https://chloemlla.com/api/auth/linuxdo/callback",
+              "frontendCallbackUrl": "https://chloemlla.com/auth/linuxdo/callback",
               "discoveryUrl": "https://connect.linux.do/.well-known/openid-configuration",
               "scopes": "openid profile email"
             }
@@ -361,7 +361,7 @@ class JsonMappingsTest {
 
         assertTrue(result.enabled)
         assertTrue(result.canSignIn)
-        assertEquals("https://tts.chloemlla.com/api/auth/linuxdo/callback", result.callbackUrl)
+        assertEquals("https://chloemlla.com/api/auth/linuxdo/callback", result.callbackUrl)
         assertEquals("openid profile email", result.scopes)
     }
 

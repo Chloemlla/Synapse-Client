@@ -9,13 +9,13 @@ class SynapseSecureOkHttpFactoryTest {
     @Test
     fun createRejectsHttpBaseUrl() {
         assertThrows(IllegalArgumentException::class.java) {
-            SynapseSecureOkHttpFactory.create("http://tts.chloemlla.com")
+            SynapseSecureOkHttpFactory.create("http://chloemlla.com")
         }
     }
 
     @Test
     fun createUsesHttpsOnlyClient() {
-        val client = SynapseSecureOkHttpFactory.create("https://tts.chloemlla.com/")
+        val client = SynapseSecureOkHttpFactory.create("https://chloemlla.com/")
 
         assertNotNull(client)
         assertEquals(8_000, client.connectTimeoutMillis)

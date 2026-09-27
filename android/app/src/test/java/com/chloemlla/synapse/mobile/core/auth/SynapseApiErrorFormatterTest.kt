@@ -9,7 +9,7 @@ class SynapseApiErrorFormatterTest {
     fun failureMessageIncludesNestedValidationDetails() {
         val message = SynapseApiErrorFormatter.failureMessage(
             method = "POST",
-            url = "https://tts.chloemlla.com/api/auth/login",
+            url = "https://chloemlla.com/api/auth/login",
             statusCode = 400,
             requestFields = listOf("identifier", "password"),
             responseText = """
@@ -26,7 +26,7 @@ class SynapseApiErrorFormatterTest {
         )
 
         assertTrue(message.contains("输入验证失败"))
-        assertTrue(message.contains("API 请求：POST https://tts.chloemlla.com/api/auth/login"))
+        assertTrue(message.contains("API 请求：POST https://chloemlla.com/api/auth/login"))
         assertTrue(message.contains("HTTP 状态：400"))
         assertTrue(message.contains("请求字段：identifier, password"))
         assertTrue(message.contains("identifier：identifier 不能为空"))
@@ -37,7 +37,7 @@ class SynapseApiErrorFormatterTest {
     fun failureMessageDoesNotEchoRequestValues() {
         val message = SynapseApiErrorFormatter.failureMessage(
             method = "POST",
-            url = "https://tts.chloemlla.com/api/auth/mobile-login/client-token/exchange",
+            url = "https://chloemlla.com/api/auth/mobile-login/client-token/exchange",
             statusCode = 401,
             requestFields = listOf("clientLoginToken", "deviceId"),
             responseText = """{ "message": "客户端登录令牌无效" }""",
@@ -51,7 +51,7 @@ class SynapseApiErrorFormatterTest {
     fun failureMessageIncludesNonJsonBodyPreview() {
         val message = SynapseApiErrorFormatter.failureMessage(
             method = "GET",
-            url = "https://tts.chloemlla.com/api/turnstile/public-config",
+            url = "https://chloemlla.com/api/turnstile/public-config",
             statusCode = 502,
             requestFields = emptyList(),
             responseText = "<html>Bad Gateway</html>",

@@ -10,14 +10,14 @@ class SynapseLiveUpdateCopyTest {
     @Test
     fun webQrWaitingIsOngoingAndPromoted() {
         val snapshot = SynapseLiveUpdateCopy.webQrWaiting(
-            site = "https://tts.chloemlla.com",
+            site = "https://chloemlla.com",
             expiresAtEpochMillis = 1_700_000_000_000L,
         )
         assertEquals(SynapseLiveUpdateKind.WebQrLogin, snapshot.kind)
         assertEquals(SynapseLiveUpdatePhase.WaitingConfirm, snapshot.phase)
         assertTrue(snapshot.ongoing)
         assertTrue(snapshot.requestPromoted)
-        assertTrue(snapshot.text.contains("tts.chloemlla.com"))
+        assertTrue(snapshot.text.contains("chloemlla.com"))
         assertEquals("qr", snapshot.openTab)
         assertTrue(snapshot.alert)
     }
@@ -48,7 +48,7 @@ class SynapseLiveUpdateCopyTest {
 
     @Test
     fun displaySitePrefersHost() {
-        assertEquals("tts.chloemlla.com", SynapseLiveUpdateCopy.displaySite("https://tts.chloemlla.com/path"))
+        assertEquals("chloemlla.com", SynapseLiveUpdateCopy.displaySite("https://chloemlla.com/path"))
         assertEquals("example.com", SynapseLiveUpdateCopy.displaySite("example.com"))
         assertEquals("网页端", SynapseLiveUpdateCopy.displaySite("  "))
     }

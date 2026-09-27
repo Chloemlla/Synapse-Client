@@ -19,12 +19,12 @@ class SynapseLinuxDoCallbackParserTest {
     @Test
     fun parsesFrontendCallbackTicket() {
         val payload = SynapseLinuxDoCallbackParser.parse(
-            "https://tts.chloemlla.com/auth/linuxdo/callback?ticket=ticket-value&intent=login",
+            "https://chloemlla.com/auth/linuxdo/callback?ticket=ticket-value&intent=login",
         )
         assertEquals("ticket-value", payload.ticket)
         assertTrue(
             SynapseLinuxDoCallbackParser.isLinuxDoRelated(
-                "https://tts.chloemlla.com/auth/linuxdo/callback?ticket=ticket-value",
+                "https://chloemlla.com/auth/linuxdo/callback?ticket=ticket-value",
             ),
         )
     }
@@ -32,12 +32,12 @@ class SynapseLinuxDoCallbackParserTest {
     @Test
     fun parsesFrontendCallbackTicketWithTrailingSlash() {
         val payload = SynapseLinuxDoCallbackParser.parse(
-            "https://tts.chloemlla.com/auth/linuxdo/callback/?ticket=ticket-slash&intent=login",
+            "https://chloemlla.com/auth/linuxdo/callback/?ticket=ticket-slash&intent=login",
         )
         assertEquals("ticket-slash", payload.ticket)
         assertTrue(
             SynapseLinuxDoCallbackParser.isLinuxDoRelated(
-                "https://tts.chloemlla.com/auth/linuxdo/callback/?ticket=ticket-slash",
+                "https://chloemlla.com/auth/linuxdo/callback/?ticket=ticket-slash",
             ),
         )
     }
@@ -55,7 +55,7 @@ class SynapseLinuxDoCallbackParserTest {
     @Test
     fun parsesProviderBindRedirect() {
         val payload = SynapseLinuxDoCallbackParser.parse(
-            "https://tts.chloemlla.com/auth/provider/bind?sessionToken=bind-session",
+            "https://chloemlla.com/auth/provider/bind?sessionToken=bind-session",
         )
         assertEquals("bind-session", payload.sessionToken)
         assertTrue(payload.isBindFlow)
@@ -65,7 +65,7 @@ class SynapseLinuxDoCallbackParserTest {
     @Test
     fun parsesError() {
         val payload = SynapseLinuxDoCallbackParser.parse(
-            "https://tts.chloemlla.com/auth/linuxdo/callback?error=access_denied",
+            "https://chloemlla.com/auth/linuxdo/callback?error=access_denied",
         )
         assertEquals("access_denied", payload.error)
     }
@@ -74,17 +74,17 @@ class SynapseLinuxDoCallbackParserTest {
     fun isLinuxDoRelatedRejectsUnrelatedHttps() {
         assertFalse(
             SynapseLinuxDoCallbackParser.isLinuxDoRelated(
-                "https://tts.chloemlla.com/login",
+                "https://chloemlla.com/login",
             ),
         )
         assertTrue(
             SynapseLinuxDoCallbackParser.isLinuxDoRelated(
-                "https://tts.chloemlla.com/auth/linuxdo/callback?ticket=x",
+                "https://chloemlla.com/auth/linuxdo/callback?ticket=x",
             ),
         )
         assertFalse(
             SynapseLinuxDoCallbackParser.isLinuxDoRelated(
-                "https://tts.chloemlla.com/api/auth/linuxdo/callback?code=x&state=y",
+                "https://chloemlla.com/api/auth/linuxdo/callback?code=x&state=y",
             ),
         )
     }
