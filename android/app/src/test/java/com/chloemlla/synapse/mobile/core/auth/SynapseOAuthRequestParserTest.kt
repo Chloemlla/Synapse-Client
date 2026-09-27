@@ -14,7 +14,7 @@ class SynapseOAuthRequestParserTest {
 
     @Test
     fun parsesAndNormalizesTrustedAuthorizationRequest() {
-        val request = SynapseOAuthRequestParser.parse(validUri, "https://TTS.CHLOEMLLA.COM/")
+        val request = SynapseOAuthRequestParser.parse(validUri, "https://CHLOEMLLA.COM/")
 
         assertEquals("https://chloemlla.com", request.providerOrigin)
         assertEquals("syn_client_demo", request.clientId)

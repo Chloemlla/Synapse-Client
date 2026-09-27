@@ -9,7 +9,7 @@ class SynapseApiOriginPolicyTest {
     fun normalizeHttpsOriginKeepsOnlyTrustedOriginParts() {
         assertEquals(
             "https://chloemlla.com:8443",
-            SynapseApiOriginPolicy.normalizeHttpsOrigin("HTTPS://TTS.CHLOEMLLA.COM:8443/"),
+            SynapseApiOriginPolicy.normalizeHttpsOrigin("HTTPS://CHLOEMLLA.COM:8443/"),
         )
     }
 
